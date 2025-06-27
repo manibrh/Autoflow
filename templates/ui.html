@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Localization Processor</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f8f9fa;
+      padding: 2em;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: white;
+      padding: 2em;
+      border-radius: 0.5em;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2 class="mb-3">File Preparation Tool by Braahmam</h2>
+  <p class="text-end">
+    <a href="/userguide" target="_blank" class="btn btn-outline-info btn-sm">📘 View User Guide</a>
+  </p>
+
+  <form id="processForm">
+    <!-- Process Type -->
+    <div class="mb-3">
+      <label class="form-label">Process Type</label><br>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="processType" value="preprocess" checked>
+        <label class="form-check-label">Preprocess</label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="processType" value="postprocess">
+        <label class="form-check-label">Postprocess</label>
+      </div>
+    </div>
+
+    <!-- Workflow -->
+    <div class="mb-3">
+      <label class="form-label">Workflow</label>
+      <select name="workflow" id="workflow" class="form-select" required>
+        <option value="tep">TEP (New Content)</option>
+        <option value="legacy">Legacy Review</option>
+      </select>
+    </div>
+
+    <!-- General File Upload -->
+    <div class="mb-3" id="tepUpload">
+      <label class="form-label">Upload Files</label>
+      <input type="file" class="form-control" name="files" multiple>
+    </div>
+
+    <!-- Legacy Preprocess: Source + ZIP -->
+    <div class="row" id="legacyUpload" style="display:none;">
+      <div class="col-md-6">
+        <label class="form-label">Source Files</label>
+        <input type="file" class="form-control" name="source_files" multiple>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Target ZIP (folders by language)</label>
+        <input type="file" class="form-control" name="target_zip" accept=".zip">
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <button type="submit" class="btn btn-primary">Start Processing</button>
+    </div>
+  </form>
+
+  <div id="status" class="mt-4" style="display:none" class="text-info">Processing...</div>
+
+  <div id="results" class="mt-3" style="display:none">
+    <h4>Processed Files:</h4>
+    <div id="fileLinks" class="mb-2"></div>
+    <a id="downloadZip" class="btn btn-success" href="#" download>Download All as ZIP</a>
+  </div>
+
+  <div class="mt-5">
+    <h5>📝 Quick Notes:</h5>
+    <ul>
+      <li><strong>TEP Workflow:</strong> For new content – upload JSON or .properties.</li>
+      <li><strong>Legacy Preprocess:</strong> Upload source files + target ZIP (language-wise folders).</li>
+      <li><strong>Legacy Postprocess:</strong> Upload translated bilingual XLIFF files only.</li>
+      <li>After processing, download individual files or a ZIP bundle.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  const form = document.getElementById('processForm');
+  const status = document.getElementById('status');
+  const results = document.getElementById('results');
+  const fileLinks = document.getElementById('fileLinks');
+  const downloadZip = document.getElementById('downloadZip');
+
+  const workflowSelect = document.getElementById('workflow');
+  const tepUpload = document.getElementById('tepUpload');
+  const legacyUpload = document.getElementById('legacyUpload');
+
+  function clearStatus() {
+    status.style.display = 'none';
+    status.textContent = '';
+    results.style.display = 'none';
+    fileLinks.innerHTML = '';
+  }
+
+  function updateUploadUI() {
+    clearStatus();
+    const workflow = workflowSelect.value;
+    const processType = document.querySelector('input[name="processType"]:checked').value;
+    const isLegacyPre = workflow === 'legacy' && processType === 'preprocess';
+
+    tepUpload.style.display = isLegacyPre ? 'none' : 'block';
+    legacyUpload.style.display = isLegacyPre ? 'flex' : 'none';
+  }
+
+  workflowSelect.addEventListener('change', updateUploadUI);
+  document.querySelectorAll('input[name="processType"]').forEach(el =>
+    el.addEventListener('change', updateUploadUI)
+  );
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearStatus();
+    status.style.display = 'block';
+    status.textContent = 'Processing...';
+
+    const formData = new FormData(form);
+    const processType = form.querySelector('input[name="processType"]:checked').value;
+    formData.append('processType', processType);
+
+    try {
+      const res = await fetch('/process', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (data.status === 'completed') {
+        status.textContent = '✅ Process completed!';
+        results.style.display = 'block';
+        downloadZip.href = '/download/batch.zip';
+
+        data.files.forEach(file => {
+          const link = document.createElement('a');
+          link.href = `/download/${file}`;
+          link.textContent = `Download ${file}`;
+          link.className = 'btn btn-outline-secondary btn-sm me-2 mb-2';
+          fileLinks.appendChild(link);
+        });
+
+        // Show any collected errors
+        if (data.errors && data.errors.length > 0) {
+          const errorList = document.createElement('ul');
+          errorList.className = 'text-danger mt-3';
+          data.errors.forEach(msg => {
+            const li = document.createElement('li');
+            li.textContent = msg;
+            errorList.appendChild(li);
+          });
+          status.appendChild(errorList);
+        }
+
+      } else {
+        status.textContent = '❌ Error: ' + (data.message || 'Unknown processing error');
+      }
+    } catch (err) {
+      status.textContent = '❌ Network or server error. Check browser console.';
+      console.error(err);
+    }
+  });
+
+  updateUploadUI();
+</script>
+</body>
+</html>
