@@ -25,6 +25,10 @@ def save_files(files, folder):
 @app.route('/')
 def index():
     return render_template('ui.html')
+
+@app.route("/")
+def home():
+    return "Autoflow deployed on Vercel!"
     
 @app.route('/userguide')
 def userguide():
