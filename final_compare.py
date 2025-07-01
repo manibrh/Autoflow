@@ -5,6 +5,7 @@ import tempfile
 import pandas as pd
 import zipfile
 import uuid
+from datetime import datetime
 
 PLACEHOLDER_PATTERN = re.compile(
     r'\\?"\{[^{}]+\}\\?"|'
@@ -149,7 +150,10 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             report_data.append(result)
 
     # Save to temp file with UUID token
-    token = str(uuid.uuid4())
-    output_path = os.path.join(tempfile.gettempdir(), f"{token}.xlsx")
-    pd.DataFrame(report_data).to_excel(output_path, index=False)
-    return output_path, token
+token = str(uuid.uuid4())
+date_str = datetime.now().strftime("%d-%b-%Y")
+report_name = f"Comparison_Report_{date_str}.xlsx"
+output_path = os.path.join(tempfile.gettempdir(), f"{token}__{report_name}")
+pd.DataFrame(report_data).to_excel(output_path, index=False)
+
+return output_path, token, report_name
