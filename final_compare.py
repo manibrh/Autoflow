@@ -146,14 +146,14 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                 })
                 continue
 
-            result = compare_files(source_data, tgt_data, lang, file)
-            report_data.append(result)
+        result = compare_files(source_data, tgt_data, lang, file)
+        report_data.append(result)
 
-    # Save to temp file with UUID token
-token = str(uuid.uuid4())
-date_str = datetime.now().strftime("%d-%b-%Y")
-report_name = f"Comparison_Report_{date_str}.xlsx"
-output_path = os.path.join(tempfile.gettempdir(), f"{token}__{report_name}")
-pd.DataFrame(report_data).to_excel(output_path, index=False)
+    # ✅ Correct indentation here
+    token = str(uuid.uuid4())
+    date_str = datetime.now().strftime("%d-%b-%Y")
+    report_name = f"Comparison_Report_{date_str}.xlsx"
+    output_path = os.path.join(tempfile.gettempdir(), f"{token}__{report_name}")
+    pd.DataFrame(report_data).to_excel(output_path, index=False)
 
-return output_path, token, report_name
+    return output_path, token, report_name
