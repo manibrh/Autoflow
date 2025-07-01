@@ -46,11 +46,21 @@ def final_compare():
     except Exception as e:
         return render_template("error.html", message=str(e))
 
+#@app.route('/temp_download/<token>')
+#def temp_download(token):
+  #  temp_file = os.path.join(tempfile.gettempdir(), f"{token}.xlsx")
+  #  if os.path.exists(temp_file):
+   #     return send_file(temp_file, as_attachment=True)
+ #   return "File not found", 404
+
 @app.route('/temp_download/<token>')
 def temp_download(token):
-    temp_file = os.path.join(tempfile.gettempdir(), f"{token}.xlsx")
-    if os.path.exists(temp_file):
-        return send_file(temp_file, as_attachment=True)
+    temp_dir = tempfile.gettempdir()
+    for fname in os.listdir(temp_dir):
+        if fname.startswith(token + "__") and fname.endswith(".xlsx"):
+            path = os.path.join(temp_dir, fname)
+            original_name = fname.split("__", 1)[1]
+            return send_file(path, as_attachment=True, download_name=original_name)
     return "File not found", 404
 
 @app.route('/process', methods=['POST'])
