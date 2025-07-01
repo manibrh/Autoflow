@@ -4,8 +4,8 @@ import re
 import tempfile
 import pandas as pd
 import zipfile
+import uuid
 
-# Match placeholders like {0}, {{name}}, <tag>, %s, etc.
 PLACEHOLDER_PATTERN = re.compile(
     r'\\?"\{[^{}]+\}\\?"|'
     r'\{\d+\}|'
@@ -18,21 +18,16 @@ PLACEHOLDER_PATTERN = re.compile(
 )
 
 def clean_filename_for_match(name):
-    """Strip language suffix (e.g., -ta-IN, -Tamil, -en) dynamically from filename."""
     base = os.path.splitext(name)[0]
     parts = re.split(r'[-_.]', base)
-
     if len(parts) > 1:
         last = parts[-1]
         if (
             len(last) <= 7 and (
-                last.istitle() or
-                last.islower() or
-                re.fullmatch(r'[a-z]{2}(-[A-Z]{2})?', last)
+                last.istitle() or last.islower() or re.fullmatch(r'[a-z]{2}(-[A-Z]{2})?', last)
             )
         ):
             parts.pop()
-
     return '-'.join(parts).lower()
 
 def load_properties_from_path(file_path):
@@ -40,10 +35,9 @@ def load_properties_from_path(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    props[key.strip()] = value.strip()
+                if line.strip() and '=' in line and not line.startswith('#'):
+                    key, val = line.split('=', 1)
+                    props[key.strip()] = val.strip()
         return props, None
     except Exception as e:
         return None, str(e)
@@ -93,25 +87,18 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
     temp_dir = tempfile.mkdtemp()
     translated_dir = os.path.join(temp_dir, "translated")
 
-    # Extract translated ZIP
     with zipfile.ZipFile(translated_zip_file, 'r') as zip_ref:
         zip_ref.extractall(translated_dir)
 
-    # Map cleaned source names
     source_map = {}
     for src in source_files:
         filename = src.filename
         cleaned = clean_filename_for_match(filename)
         ext = os.path.splitext(filename)[1]
-
         path = os.path.join(temp_dir, filename)
         src.save(path)
 
-        if ext == '.json':
-            data, err = load_json_from_path(path)
-        else:
-            data, err = load_properties_from_path(path)
-
+        data, err = (load_json_from_path(path) if ext == '.json' else load_properties_from_path(path))
         if err:
             report_data.append({
                 "File Name": filename, "Language": "", "Error Type": "Source Error", "Error Details": err,
@@ -119,21 +106,17 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                 "Quote Structure Mismatches": "", "Untranslated Keys": ""
             })
             continue
-
         source_map[cleaned] = (filename, data)
 
-    # Match and compare translated files
     for lang in os.listdir(translated_dir):
         lang_path = os.path.join(translated_dir, lang)
         if not os.path.isdir(lang_path):
             continue
-
         for file in os.listdir(lang_path):
             tgt_path = os.path.join(lang_path, file)
             cleaned_tgt = clean_filename_for_match(file)
             ext = os.path.splitext(file)[1]
 
-            # Exact or fuzzy match
             if cleaned_tgt in source_map:
                 src_filename, source_data = source_map[cleaned_tgt]
             else:
@@ -145,25 +128,17 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                         break
                 if not matched:
                     report_data.append({
-                        "File Name": file,
-                        "Language": lang,
-                        "Error Type": "No matching source file",
+                        "File Name": file, "Language": lang, "Error Type": "No matching source file",
                         "Error Details": f"{file} unmatched",
                         "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
                         "Quote Structure Mismatches": "", "Untranslated Keys": ""
                     })
                     continue
 
-            if ext == '.json':
-                tgt_data, err = load_json_from_path(tgt_path)
-            else:
-                tgt_data, err = load_properties_from_path(tgt_path)
-
+            tgt_data, err = (load_json_from_path(tgt_path) if ext == '.json' else load_properties_from_path(tgt_path))
             if err:
                 report_data.append({
-                    "File Name": file,
-                    "Language": lang,
-                    "Error Type": "Target Error",
+                    "File Name": file, "Language": lang, "Error Type": "Target Error",
                     "Error Details": err,
                     "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
                     "Quote Structure Mismatches": "", "Untranslated Keys": ""
@@ -173,6 +148,8 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             result = compare_files(source_data, tgt_data, lang, file)
             report_data.append(result)
 
-    output_path = os.path.join(temp_dir, "Comparison_Report.xlsx")
+    # Save to temp file with UUID token
+    token = str(uuid.uuid4())
+    output_path = os.path.join(tempfile.gettempdir(), f"{token}.xlsx")
     pd.DataFrame(report_data).to_excel(output_path, index=False)
-    return output_path
+    return output_path, token
