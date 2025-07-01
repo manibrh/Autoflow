@@ -4,16 +4,23 @@
   <meta charset="UTF-8">
   <title>Final Comparison Results</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .spinner-border-sm {
+      display: none;
+      margin-left: 0.5rem;
+    }
+  </style>
 </head>
 <body>
 <div class="container mt-5">
-  <h3>🧾 Final Comparison Report</h3>
+  <h3 class="mb-4">🧾 Final Comparison Report</h3>
 
   {% if rows %}
-    <div class="table-responsive my-4">
-      <table class="table table-bordered table-sm">
+    <div class="table-responsive mb-4">
+      <table class="table table-bordered table-hover table-sm align-middle">
         <thead class="table-light">
           <tr>
+            <th>#</th>
             {% for h in headers %}
               <th>{{ h }}</th>
             {% endfor %}
@@ -22,6 +29,7 @@
         <tbody>
           {% for row in rows %}
             <tr>
+              <td>{{ loop.index }}</td>
               {% for col in row %}
                 <td>{{ col }}</td>
               {% endfor %}
@@ -31,13 +39,26 @@
       </table>
     </div>
 
-    <a href="{{ report_url }}" class="btn btn-primary" download>Download Excel Report</a>
+    <a id="downloadBtn" href="{{ report_url }}" class="btn btn-primary" download>
+      ⬇️ Download Excel Report
+      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" id="spinner"></span>
+    </a>
   {% else %}
-    <p class="text-muted">No issues found.</p>
+    <div class="alert alert-info">✅ No issues found in the comparison.</div>
   {% endif %}
 
   <hr>
   <a href="/" class="btn btn-outline-secondary">← Back to Dashboard</a>
 </div>
+
+<script>
+  const downloadBtn = document.getElementById('downloadBtn');
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      const spinner = document.getElementById('spinner');
+      if (spinner) spinner.style.display = 'inline-block';
+    });
+  }
+</script>
 </body>
 </html>
