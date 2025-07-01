@@ -39,10 +39,10 @@
       </table>
     </div>
 
-    <a id="downloadBtn" href="{{ report_url }}" class="btn btn-primary" download>
-      ⬇️ Download Excel Report
-      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" id="spinner"></span>
-    </a>
+<a id="downloadBtn" href="{{ report_url }}" class="btn btn-primary" download="{{ report_name }}">
+  ⬇️ Download {{ report_name }}
+  <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" id="spinner"></span>
+</a>
   {% else %}
     <div class="alert alert-info">✅ No issues found in the comparison.</div>
   {% endif %}
