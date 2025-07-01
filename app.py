@@ -1,3 +1,4 @@
+# app.py (updated to support file uploads for final compare)
 import os
 import shutil
 import tempfile
@@ -8,8 +9,7 @@ from tep_preprocess import run_tep_preprocessing
 from tep_postprocess import run_tep_postprocessing
 from legacy_preprocess import run_legacy_preprocessing
 from legacy_postprocess import run_legacy_postprocessing
-from utils.final_compare import run_final_comparison
-
+from utils.final_compare import run_final_comparison_from_uploads
 
 app = Flask(__name__)
 app.secret_key = 'localization_secret'
@@ -31,7 +31,7 @@ def index():
 @app.route("/")
 def home():
     return "Autoflow deployed on Vercel!"
-    
+
 @app.route('/userguide')
 def userguide():
     return render_template('userguide.html')
@@ -39,11 +39,12 @@ def userguide():
 @app.route('/final_compare', methods=['POST'])
 def final_compare():
     try:
-        output_path, filename = run_final_comparison()
-        return send_file(output_path, as_attachment=True, download_name=filename)
+        source_files = request.files.getlist('source_files')
+        translated_files = request.files.getlist('translated_files')
+        output_path = run_final_comparison_from_uploads(source_files, translated_files)
+        return send_file(output_path, as_attachment=True, download_name="Comparison_Report.xlsx")
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/process', methods=['POST'])
 def process():
