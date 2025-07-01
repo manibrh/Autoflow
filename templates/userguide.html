@@ -2,81 +2,100 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>User Guide – Localization WebApp</title>
+  <title>User Guide – Autoflow Web App</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body { background-color: #f8f9fa; padding: 2em; }
-    .container { max-width: 900px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 2em;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
     h1, h2 { margin-top: 1em; }
     code { background: #eee; padding: 0.2em 0.4em; border-radius: 4px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>📝 User Guide: FilePrep Web Application</h1>
-    <p><strong>URL:</strong> <a href="/">https://fileprep-newcontents.onrender.com</a></p>
+    <h1>📝 User Guide: Autoflow Localization Web App</h1>
+    <p><strong>URL:</strong> <a href="https://autoflow-8667.onrender.com" target="_blank">https://autoflow-8667.onrender.com</a></p>
 
     <h2>🚀 What This App Does</h2>
-    <p>This app helps you preprocess and postprocess localization files for TEP (New Content) and Legacy Review workflows.</p>
+    <p>This web app automates localization workflows including:</p>
     <ul>
-      <li>Generate XLIFF from JSON/Properties</li>
-      <li>Convert translated XLIFFs to localized files</li>
-      <li>Supports multiple languages + batch downloads</li>
+      <li>🛠 Generating bilingual XLIFFs from JSON/Properties</li>
+      <li>📥 Converting translated XLIFFs back into localized files</li>
+      <li>📊 Comparing final source vs. target files before delivery</li>
+      <li>📦 Supports multi-language batch processing</li>
     </ul>
 
     <h2>🧭 Step-by-Step</h2>
     <ol>
       <li><strong>Select Workflow</strong> – TEP or Legacy</li>
       <li><strong>Select Process Type</strong> – Preprocess or Postprocess</li>
-      <li><strong>Upload files</strong> – according to instructions below</li>
-      <li><strong>Click Start</strong> – then download your results</li>
+      <li><strong>Upload Files</strong> – based on the selected mode</li>
+      <li><strong>Click Start</strong> – wait for processing</li>
+      <li><strong>Download Results</strong> – file links + ZIP download</li>
     </ol>
 
     <h2>🔁 Workflow Details</h2>
+
     <h4>✅ TEP – Preprocess</h4>
     <ul>
-      <li>Upload JSON or .properties files</li>
-      <li>Generates bilingual .xliff files</li>
+      <li>Upload <code>.json</code> or <code>.properties</code> files</li>
+      <li>Output: bilingual XLIFF files for translation</li>
     </ul>
 
     <h4>✅ TEP – Postprocess</h4>
     <ul>
-      <li>Upload translated .xliff files</li>
-      <li>Generates localized JSON/Properties files (per language)</li>
+      <li>Upload translated <code>.xliff</code> files</li>
+      <li>Output: localized JSON/Properties files renamed with language (e.g. <code>MyFile-Tamil.json</code>)</li>
     </ul>
 
     <h4>🟠 Legacy – Preprocess</h4>
     <ul>
-      <li>Upload Source files flat</li>
-      <li>Upload <code>.zip</code> of Target files organized like:<br>
-      <code>hi-IN/file.json</code>, <code>ta-IN/file.properties</code></li>
-      <li>Generates bilingual XLIFFs per language</li>
+      <li>Upload source files (<code>.json</code> or <code>.properties</code>)</li>
+      <li>Upload <strong>ZIP of target files</strong> organized like:<br>
+        <code>hi-IN/file.json</code>, <code>ta-IN/file.properties</code>
+      </li>
+      <li>Output: bilingual XLIFF files (only for matching keys)</li>
     </ul>
 
     <h4>🟠 Legacy – Postprocess</h4>
     <ul>
-      <li>Upload translated bilingual .xliff files</li>
-      <li>Outputs updated localized files per language</li>
+      <li>Upload translated bilingual <code>.xliff</code> files</li>
+      <li>Output: updated localized files named like <code>MyFile-Hindi.json</code></li>
+    </ul>
+
+    <h2>🔍 Final Compare</h2>
+    <ul>
+      <li>Upload source files (.json/.properties)</li>
+      <li>Upload ZIP of translated files (folder-wise: <code>ta-IN/</code>, <code>hi-IN/</code>)</li>
+      <li>Output: Excel report + preview table</li>
     </ul>
 
     <h2>📦 Output</h2>
     <ul>
-      <li>Files are shown individually</li>
-      <li>Batch download as <code>batch.zip</code></li>
+      <li>Files are listed with individual download links</li>
+      <li>Full ZIP available as <code>batch.zip</code></li>
     </ul>
 
-    <h2>⚠️ Errors You Might See</h2>
+    <h2>⚠️ Common Errors</h2>
     <ul>
-      <li><strong>Missing Source or Target</strong>: Upload required files</li>
-      <li><strong>ZIP not extracted</strong>: Must upload .zip with folders</li>
-      <li><strong>XLIFF mismatch</strong>: Use correct IDs/keys from original</li>
+      <li><strong>Missing Source or Target:</strong> Required files not uploaded</li>
+      <li><strong>ZIP Error:</strong> ZIP folder structure not valid (use language-code folders)</li>
+      <li><strong>XLIFF Mismatch:</strong> Keys not matched between XLIFF and original</li>
     </ul>
 
-    <h2>✅ Quick Notes</h2>
+    <h2>✅ Notes</h2>
     <ul>
-      <li><strong>TEP:</strong> Brand-new translations</li>
-      <li><strong>Legacy:</strong> For updates to existing translations</li>
-      <li><strong>Use ZIP</strong> only for legacy target upload</li>
+      <li><strong>TEP:</strong> Use for new content translation workflows</li>
+      <li><strong>Legacy:</strong> Use when target already exists and needs review</li>
+      <li><strong>ZIP:</strong> Only required for Legacy Preprocess and Final Compare</li>
+      <li><strong>Languages:</strong> Detected automatically from XLIFF metadata</li>
     </ul>
   </div>
 </body>
