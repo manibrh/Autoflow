@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import zipfile
 import pandas as pd
+import uuid
 from flask import Flask, render_template, request, send_file
 
 from tep_preprocess import run_tep_preprocessing
@@ -34,17 +35,23 @@ def final_compare():
         if not source_files or not translated_zip:
             return render_template("error.html", message="Missing source files or translated ZIP")
 
-        output_path = run_final_comparison_from_zip(source_files, translated_zip)
+        output_path, token = run_final_comparison_from_zip(source_files, translated_zip)
 
-        import pandas as pd
         df = pd.read_excel(output_path)
         headers = df.columns.tolist()
         rows = df.fillna('').values.tolist()
 
-        return render_template("compare_results.html", headers=headers, rows=rows, report_url="/download/Comparison_Report.xlsx")
+        return render_template("compare_results.html", headers=headers, rows=rows, report_url=f"/temp_download/{token}")
 
     except Exception as e:
         return render_template("error.html", message=str(e))
+
+@app.route('/temp_download/<token>')
+def temp_download(token):
+    temp_file = os.path.join(tempfile.gettempdir(), f"{token}.xlsx")
+    if os.path.exists(temp_file):
+        return send_file(temp_file, as_attachment=True)
+    return "File not found", 404
 
 @app.route('/process', methods=['POST'])
 def process():
