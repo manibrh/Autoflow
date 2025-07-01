@@ -80,6 +80,23 @@
     <a id="downloadZip" class="btn btn-success" href="#" download>Download All as ZIP</a>
   </div>
 
+  <hr class="my-4">
+
+  <h4>🧪 Run Final Compare (Source vs Translated)</h4>
+  <form action="/final_compare" method="post" enctype="multipart/form-data">
+    <div class="row mb-3">
+      <div class="col">
+        <label class="form-label">Source Files (.json / .properties)</label>
+        <input type="file" class="form-control" name="source_files" multiple required>
+      </div>
+      <div class="col">
+        <label class="form-label">Translated Files (.json / .properties)</label>
+        <input type="file" class="form-control" name="translated_files" multiple required>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-success">Run Final Compare</button>
+  </form>
+
   <div class="mt-5">
     <h5>📝 Quick Notes:</h5>
     <ul>
