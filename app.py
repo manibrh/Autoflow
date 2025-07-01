@@ -2,7 +2,8 @@ import os
 import shutil
 import tempfile
 import zipfile
-from flask import Flask, render_template, request, send_file, jsonify
+import pandas as pd
+from flask import Flask, render_template, request, send_file
 
 from tep_preprocess import run_tep_preprocessing
 from tep_postprocess import run_tep_postprocessing
@@ -16,16 +17,13 @@ app.secret_key = 'localization_secret'
 TEMP_OUTPUT = "static/processed_files"
 os.makedirs(TEMP_OUTPUT, exist_ok=True)
 
-
 @app.route('/')
 def index():
     return render_template('ui.html')
 
-
 @app.route('/userguide')
 def userguide():
     return render_template('userguide.html')
-
 
 @app.route('/final_compare', methods=['POST'])
 def final_compare():
@@ -34,26 +32,19 @@ def final_compare():
         translated_zip = request.files.get('translated_zip')
 
         if not source_files or not translated_zip:
-            return jsonify({"status": "error", "message": "Missing source files or translated ZIP"}), 400
+            return render_template("error.html", message="Missing source files or translated ZIP")
 
-        # Run final comparison and get output path
         output_path = run_final_comparison_from_zip(source_files, translated_zip)
 
-        # Parse Excel for preview
+        import pandas as pd
         df = pd.read_excel(output_path)
         headers = df.columns.tolist()
         rows = df.fillna('').values.tolist()
 
-        return jsonify({
-            "status": "ok",
-            "headers": headers,
-            "rows": rows,
-            "report_url": "/download/Comparison_Report.xlsx"
-        })
+        return render_template("compare_results.html", headers=headers, rows=rows, report_url="/download/Comparison_Report.xlsx")
 
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
+        return render_template("error.html", message=str(e))
 
 @app.route('/process', methods=['POST'])
 def process():
@@ -93,6 +84,7 @@ def process():
                     run_tep_preprocessing(input_dir, output_dir)
                 else:
                     run_tep_postprocessing(input_dir, output_dir)
+                errors = []
             else:
                 if process_type == 'preprocess':
                     errors = run_legacy_preprocessing(input_dir, output_dir)
@@ -100,12 +92,12 @@ def process():
                     run_legacy_postprocessing(input_dir, output_dir)
                     errors = []
 
-            # Clear and prepare TEMP_OUTPUT
+            # Clear and copy to TEMP_OUTPUT
             if os.path.exists(TEMP_OUTPUT):
                 shutil.rmtree(TEMP_OUTPUT)
             shutil.copytree(output_dir, TEMP_OUTPUT)
 
-            # Create ZIP of results
+            # Create ZIP
             zip_path = os.path.join(TEMP_OUTPUT, "batch.zip")
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for root, _, files in os.walk(TEMP_OUTPUT):
@@ -113,7 +105,7 @@ def process():
                         file_path = os.path.join(root, file)
                         arcname = os.path.relpath(file_path, TEMP_OUTPUT)
                         if not arcname.endswith("batch.zip"):
-                            zipf.write(file_path, arcname=arcname)
+                            zipf.write(file_path, arcname)
 
             output_files = []
             for root, _, files in os.walk(TEMP_OUTPUT):
@@ -122,15 +114,10 @@ def process():
                     if not rel_path.endswith("batch.zip"):
                         output_files.append(rel_path.replace("\\", "/"))
 
-            return jsonify({
-                "status": "completed",
-                "files": output_files,
-                "errors": errors
-            })
+            return render_template("results.html", files=output_files, errors=errors)
 
         except Exception as e:
-            return jsonify({"status": "error", "message": str(e)}), 500
-
+            return render_template("error.html", message=str(e))
 
 @app.route('/download/<path:filename>')
 def download(filename):
@@ -139,8 +126,6 @@ def download(filename):
         return send_file(file_path, as_attachment=True)
     return "File not found", 404
 
-
-# ✅ Final entrypoint for Render
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
