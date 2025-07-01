@@ -36,8 +36,20 @@ def final_compare():
         if not source_files or not translated_zip:
             return jsonify({"status": "error", "message": "Missing source files or translated ZIP"}), 400
 
+        # Run final comparison and get output path
         output_path = run_final_comparison_from_zip(source_files, translated_zip)
-        return send_file(output_path, as_attachment=True, download_name="Comparison_Report.xlsx")
+
+        # Parse Excel for preview
+        df = pd.read_excel(output_path)
+        headers = df.columns.tolist()
+        rows = df.fillna('').values.tolist()
+
+        return jsonify({
+            "status": "ok",
+            "headers": headers,
+            "rows": rows,
+            "report_url": "/download/Comparison_Report.xlsx"
+        })
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
