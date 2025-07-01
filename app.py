@@ -9,7 +9,7 @@ from tep_preprocess import run_tep_preprocessing
 from tep_postprocess import run_tep_postprocessing
 from legacy_preprocess import run_legacy_preprocessing
 from legacy_postprocess import run_legacy_postprocessing
-from utils.final_compare import run_final_comparison_from_uploads
+from final_compare import run_final_comparison_from_uploads
 
 app = Flask(__name__)
 app.secret_key = 'localization_secret'
