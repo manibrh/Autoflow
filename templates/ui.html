@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Localization Processor</title>
+  <title>Localization Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body {
@@ -10,185 +10,198 @@
       padding: 2em;
     }
     .container {
-      max-width: 800px;
+      max-width: 1000px;
       margin: auto;
+    }
+    .tab-content {
+      padding: 1.5rem;
+      border: 1px solid #dee2e6;
+      border-top: none;
       background: white;
-      padding: 2em;
-      border-radius: 0.5em;
-      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+      border-radius: 0 0 .5rem .5rem;
+    }
+    .table-sm td, .table-sm th {
+      padding: 0.3rem;
     }
   </style>
 </head>
 <body>
 <div class="container">
-  <h2 class="mb-3">File Preparation Tool by Braahmam</h2>
+  <h2 class="mb-4 text-center">🌐 Localization Processing Dashboard</h2>
   <p class="text-end">
     <a href="/userguide" target="_blank" class="btn btn-outline-info btn-sm">📘 View User Guide</a>
   </p>
 
-  <form id="processForm">
-    <!-- Process Type -->
-    <div class="mb-3">
-      <label class="form-label">Process Type</label><br>
-      <div class="form-check form-check-inline">
-        <input class="form-check-input" type="radio" name="processType" value="preprocess" checked>
-        <label class="form-check-label">Preprocess</label>
-      </div>
-      <div class="form-check form-check-inline">
-        <input class="form-check-input" type="radio" name="processType" value="postprocess">
-        <label class="form-check-label">Postprocess</label>
-      </div>
-    </div>
+  <ul class="nav nav-tabs" id="workflowTabs">
+    <li class="nav-item">
+      <a class="nav-link active" data-bs-toggle="tab" href="#tep">TEP Workflow</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-bs-toggle="tab" href="#legacy">Legacy Workflow</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-bs-toggle="tab" href="#compare">Final Compare</a>
+    </li>
+  </ul>
 
-    <!-- Workflow -->
-    <div class="mb-3">
-      <label class="form-label">Workflow</label>
-      <select name="workflow" id="workflow" class="form-select" required>
-        <option value="tep">TEP (New Content)</option>
-        <option value="legacy">Legacy Review</option>
-      </select>
-    </div>
-
-    <!-- General File Upload -->
-    <div class="mb-3" id="tepUpload">
-      <label class="form-label">Upload Files</label>
-      <input type="file" class="form-control" name="files" multiple>
-    </div>
-
-    <!-- Legacy Preprocess: Source + ZIP -->
-    <div class="row" id="legacyUpload" style="display:none;">
-      <div class="col-md-6">
-        <label class="form-label">Source Files</label>
-        <input type="file" class="form-control" name="source_files" multiple>
-      </div>
-      <div class="col-md-6">
-        <label class="form-label">Target ZIP (folders by language)</label>
-        <input type="file" class="form-control" name="target_zip" accept=".zip">
+  <div class="tab-content">
+    <!-- TEP Tab -->
+    <div class="tab-pane fade show active" id="tep">
+      <form id="tepForm" method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label class="form-label">Select Process</label>
+          <select name="processType" class="form-select">
+            <option value="preprocess">Preprocess</option>
+            <option value="postprocess">Postprocess</option>
+          </select>
+        </div>
+        <input type="hidden" name="workflow" value="tep">
+        <div class="mb-3">
+          <label class="form-label">Upload Files</label>
+          <input type="file" class="form-control" name="files" multiple>
+        </div>
+        <button class="btn btn-primary">Start TEP</button>
+      </form>
+      <div id="tepSpinner" class="text-center mt-3" style="display: none;">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">Processing TEP...</p>
       </div>
     </div>
 
-    <div class="mt-4">
-      <button type="submit" class="btn btn-primary">Start Processing</button>
-    </div>
-  </form>
-
-  <div id="status" class="mt-4" style="display:none" class="text-info">Processing...</div>
-
-  <div id="results" class="mt-3" style="display:none">
-    <h4>Processed Files:</h4>
-    <div id="fileLinks" class="mb-2"></div>
-    <a id="downloadZip" class="btn btn-success" href="#" download>Download All as ZIP</a>
-  </div>
-
-  <hr class="my-4">
-  <h4>🧪 Run Final Compare (Multiple Files via ZIP)</h4>
-  <form action="/final_compare" method="post" enctype="multipart/form-data">
-    <div class="row mb-3">
-      <div class="col">
-        <label class="form-label">Source Files (.json / .properties)</label>
-        <input type="file" class="form-control" name="source_files" multiple required>
+    <!-- Legacy Tab -->
+    <div class="tab-pane fade" id="legacy">
+      <form id="legacyForm" method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label class="form-label">Select Process</label>
+          <select name="processType" class="form-select">
+            <option value="preprocess">Preprocess</option>
+            <option value="postprocess">Postprocess</option>
+          </select>
+        </div>
+        <input type="hidden" name="workflow" value="legacy">
+        <div id="legacyPre" class="row mb-3">
+          <div class="col-md-6">
+            <label class="form-label">Source Files</label>
+            <input type="file" class="form-control" name="source_files" multiple>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Target ZIP</label>
+            <input type="file" class="form-control" name="target_zip" accept=".zip">
+          </div>
+        </div>
+        <div id="legacyPost" class="mb-3" style="display:none">
+          <label class="form-label">Upload Translated XLIFFs</label>
+          <input type="file" class="form-control" name="files" multiple>
+        </div>
+        <button class="btn btn-primary">Start Legacy</button>
+      </form>
+      <div id="legacySpinner" class="text-center mt-3" style="display: none;">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">Processing Legacy Workflow...</p>
       </div>
-      <div class="col">
-        <label class="form-label">Translated ZIP (language-wise folders)</label>
-        <input type="file" class="form-control" name="translated_zip" accept=".zip" required>
+    </div>
+
+    <!-- Final Compare Tab -->
+    <div class="tab-pane fade" id="compare">
+      <form id="compareForm" method="post" enctype="multipart/form-data">
+        <div class="row mb-3">
+          <div class="col">
+            <label class="form-label">Source Files (.json / .properties)</label>
+            <input type="file" class="form-control" name="source_files" multiple required>
+          </div>
+          <div class="col">
+            <label class="form-label">Translated ZIP (language-wise folders)</label>
+            <input type="file" class="form-control" name="translated_zip" accept=".zip" required>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-success">Run Final Compare</button>
+      </form>
+      <div id="compareSpinner" class="text-center mt-3" style="display: none;">
+        <div class="spinner-border text-success" role="status"></div>
+        <p class="mt-2 text-muted">Running comparison, please wait...</p>
+      </div>
+
+      <div id="compareResults" style="display:none" class="mt-4">
+        <h5>🧾 Comparison Issues Preview</h5>
+        <div class="table-responsive">
+          <table class="table table-bordered table-sm" id="resultTable">
+            <thead class="table-light"></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <a id="downloadReport" href="#" class="btn btn-outline-primary mt-3" style="display:none">Download Report</a>
       </div>
     </div>
-    <button type="submit" class="btn btn-success">Run Final Compare</button>
-  </form>
-
-  <div class="mt-5">
-    <h5>📝 Quick Notes:</h5>
-    <ul>
-      <li><strong>TEP Workflow:</strong> For new content – upload JSON or .properties.</li>
-      <li><strong>Legacy Preprocess:</strong> Upload source files + target ZIP (language-wise folders).</li>
-      <li><strong>Legacy Postprocess:</strong> Upload translated bilingual XLIFF files only.</li>
-      <li><strong>Final Compare:</strong> Match and validate based on filename stem, ignore language suffixes.</li>
-      <li>After processing, download individual files or a ZIP bundle.</li>
-    </ul>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  const form = document.getElementById('processForm');
-  const status = document.getElementById('status');
-  const results = document.getElementById('results');
-  const fileLinks = document.getElementById('fileLinks');
-  const downloadZip = document.getElementById('downloadZip');
+  const legacyForm = document.getElementById('legacyForm');
+  const legacyPre = document.getElementById('legacyPre');
+  const legacyPost = document.getElementById('legacyPost');
+  const legacySpinner = document.getElementById('legacySpinner');
+  const tepForm = document.getElementById('tepForm');
+  const tepSpinner = document.getElementById('tepSpinner');
+  const compareForm = document.getElementById('compareForm');
+  const resultTable = document.getElementById('resultTable');
+  const compareResults = document.getElementById('compareResults');
+  const downloadReport = document.getElementById('downloadReport');
+  const compareSpinner = document.getElementById('compareSpinner');
 
-  const workflowSelect = document.getElementById('workflow');
-  const tepUpload = document.getElementById('tepUpload');
-  const legacyUpload = document.getElementById('legacyUpload');
+  legacyForm.querySelector('[name="processType"]').addEventListener('change', function () {
+    const isPre = this.value === 'preprocess';
+    legacyPre.style.display = isPre ? 'flex' : 'none';
+    legacyPost.style.display = isPre ? 'none' : 'block';
+  });
 
-  function clearStatus() {
-    status.style.display = 'none';
-    status.textContent = '';
-    results.style.display = 'none';
-    fileLinks.innerHTML = '';
-  }
+  legacyForm.addEventListener('submit', () => {
+    legacySpinner.style.display = 'block';
+  });
 
-  function updateUploadUI() {
-    clearStatus();
-    const workflow = workflowSelect.value;
-    const processType = document.querySelector('input[name="processType"]:checked').value;
-    const isLegacyPre = workflow === 'legacy' && processType === 'preprocess';
+  tepForm.addEventListener('submit', () => {
+    tepSpinner.style.display = 'block';
+  });
 
-    tepUpload.style.display = isLegacyPre ? 'none' : 'block';
-    legacyUpload.style.display = isLegacyPre ? 'flex' : 'none';
-  }
-
-  workflowSelect.addEventListener('change', updateUploadUI);
-  document.querySelectorAll('input[name="processType"]').forEach(el =>
-    el.addEventListener('change', updateUploadUI)
-  );
-
-  form.addEventListener('submit', async (e) => {
+  compareForm.addEventListener('submit', async function(e) {
     e.preventDefault();
-    clearStatus();
-    status.style.display = 'block';
-    status.textContent = 'Processing...';
+    compareResults.style.display = 'none';
+    resultTable.querySelector('thead').innerHTML = '';
+    resultTable.querySelector('tbody').innerHTML = '';
+    downloadReport.style.display = 'none';
+    compareSpinner.style.display = 'block';
 
-    const formData = new FormData(form);
-    const processType = form.querySelector('input[name="processType"]:checked').value;
-    formData.append('processType', processType);
+    const formData = new FormData(compareForm);
 
     try {
-      const res = await fetch('/process', { method: 'POST', body: formData });
+      const res = await fetch('/final_compare', {
+        method: 'POST',
+        body: formData
+      });
       const data = await res.json();
+      compareSpinner.style.display = 'none';
 
-      if (data.status === 'completed') {
-        status.textContent = '✅ Process completed!';
-        results.style.display = 'block';
-        downloadZip.href = '/download/batch.zip';
-
-        data.files.forEach(file => {
-          const link = document.createElement('a');
-          link.href = `/download/${file}`;
-          link.textContent = `Download ${file}`;
-          link.className = 'btn btn-outline-secondary btn-sm me-2 mb-2';
-          fileLinks.appendChild(link);
-        });
-
-        if (data.errors && data.errors.length > 0) {
-          const errorList = document.createElement('ul');
-          errorList.className = 'text-danger mt-3';
-          data.errors.forEach(msg => {
-            const li = document.createElement('li');
-            li.textContent = msg;
-            errorList.appendChild(li);
-          });
-          status.appendChild(errorList);
-        }
-
-      } else {
-        status.textContent = '❌ Error: ' + (data.message || 'Unknown processing error');
+      if (data.status !== 'ok') {
+        alert("❌ " + data.message);
+        return;
       }
+
+      const thead = resultTable.querySelector('thead');
+      const tbody = resultTable.querySelector('tbody');
+      thead.innerHTML = '<tr>' + data.headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+      tbody.innerHTML = data.rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('');
+
+      compareResults.style.display = 'block';
+      downloadReport.href = data.report_url;
+      downloadReport.download = 'Comparison_Report.xlsx';
+      downloadReport.style.display = 'inline-block';
+
     } catch (err) {
-      status.textContent = '❌ Network or server error. Check browser console.';
+      compareSpinner.style.display = 'none';
+      alert("❌ Failed to run comparison");
       console.error(err);
     }
   });
-
-  updateUploadUI();
 </script>
 </body>
 </html>
