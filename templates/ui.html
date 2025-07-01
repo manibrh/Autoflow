@@ -81,8 +81,7 @@
   </div>
 
   <hr class="my-4">
-
-  <h4>🧪 Run Final Compare (Source vs Translated)</h4>
+  <h4>🧪 Run Final Compare (Multiple Files via ZIP)</h4>
   <form action="/final_compare" method="post" enctype="multipart/form-data">
     <div class="row mb-3">
       <div class="col">
@@ -90,8 +89,8 @@
         <input type="file" class="form-control" name="source_files" multiple required>
       </div>
       <div class="col">
-        <label class="form-label">Translated Files (.json / .properties)</label>
-        <input type="file" class="form-control" name="translated_files" multiple required>
+        <label class="form-label">Translated ZIP (language-wise folders)</label>
+        <input type="file" class="form-control" name="translated_zip" accept=".zip" required>
       </div>
     </div>
     <button type="submit" class="btn btn-success">Run Final Compare</button>
@@ -103,6 +102,7 @@
       <li><strong>TEP Workflow:</strong> For new content – upload JSON or .properties.</li>
       <li><strong>Legacy Preprocess:</strong> Upload source files + target ZIP (language-wise folders).</li>
       <li><strong>Legacy Postprocess:</strong> Upload translated bilingual XLIFF files only.</li>
+      <li><strong>Final Compare:</strong> Match and validate based on filename stem, ignore language suffixes.</li>
       <li>After processing, download individual files or a ZIP bundle.</li>
     </ul>
   </div>
@@ -168,7 +168,6 @@
           fileLinks.appendChild(link);
         });
 
-        // Show any collected errors
         if (data.errors && data.errors.length > 0) {
           const errorList = document.createElement('ul');
           errorList.className = 'text-danger mt-3';
