@@ -35,13 +35,16 @@ def final_compare():
         if not source_files or not translated_zip:
             return render_template("error.html", message="Missing source files or translated ZIP")
 
-        output_path, token = run_final_comparison_from_zip(source_files, translated_zip)
+        # ✅ Call the function and unpack 3 values
+        output_path, token, report_name = run_final_comparison_from_zip(source_files, translated_zip)
 
+        # ✅ Preview the report content
         df = pd.read_excel(output_path)
         headers = df.columns.tolist()
         rows = df.fillna('').values.tolist()
 
-        return render_template("compare_results.html", headers=headers, rows=rows, report_url=f"/temp_download/{token}")
+        return render_template("compare_results.html", headers=headers, rows=rows,
+                               report_url=f"/temp_download/{token}", report_name=report_name)
 
     except Exception as e:
         return render_template("error.html", message=str(e))
