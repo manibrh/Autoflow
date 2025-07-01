@@ -1,9 +1,10 @@
-# utils/final_compare.py (upload-based)
+# final_compare.py with ZIP and normalized filename matching
 import os
 import json
 import re
 import tempfile
 import pandas as pd
+import zipfile
 from werkzeug.datastructures import FileStorage
 
 PLACEHOLDER_PATTERN = re.compile(
@@ -17,25 +18,32 @@ PLACEHOLDER_PATTERN = re.compile(
     r'\$\w+'                # $variable
 )
 
-def load_properties(file: FileStorage):
+def normalize_filename(name):
+    name = os.path.splitext(name)[0]  # remove .json/.properties
+    parts = re.split(r'[-_.]', name)
+    # Remove last segment if it looks like a language (e.g., 'en', 'hi-IN', 'Tamil')
+    if len(parts) > 1 and re.match(r'^[a-zA-Z]{2,}(-[a-zA-Z]{2,})?$', parts[-1]):
+        parts.pop()
+    return '-'.join(parts)
+
+def load_properties_from_path(file_path):
     props = {}
     try:
-        lines = file.read().decode('utf-8').splitlines()
-        for line_number, line in enumerate(lines, start=1):
-            line = line.strip()
-            if line and not line.startswith('#'):
-                if '=' not in line:
-                    raise ValueError(f"Invalid format at line {line_number}")
-                key, value = line.split('=', 1)
-                props[key.strip()] = value.strip()
-        file.seek(0)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    if '=' in line:
+                        key, value = line.split('=', 1)
+                        props[key.strip()] = value.strip()
         return props, None
     except Exception as e:
         return None, str(e)
 
-def load_json(file: FileStorage):
+def load_json_from_path(file_path):
     try:
-        return json.load(file), None
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f), None
     except Exception as e:
         return None, str(e)
 
@@ -72,44 +80,64 @@ def compare_files(source_data, translated_data, lang, file_name):
         "Untranslated Keys": ", ".join(untranslated_keys)
     }
 
-def run_final_comparison_from_uploads(source_files, translated_files):
+def run_final_comparison_from_zip(source_files, translated_zip_file):
     report_data = []
     temp_dir = tempfile.mkdtemp()
+    translated_dir = os.path.join(temp_dir, "translated")
 
-    # Map uploaded translated files by filename
-    translated_map = {f.filename: f for f in translated_files}
+    # Extract ZIP
+    with zipfile.ZipFile(translated_zip_file, 'r') as zip_ref:
+        zip_ref.extractall(translated_dir)
 
+    # Build mapping: {normalized_name: (source_filename, source_data)}
+    source_map = {}
     for src in source_files:
-        file_name = src.filename
-        if not file_name.endswith(('.json', '.properties')):
-            continue
+        filename = src.filename
+        norm = normalize_filename(filename)
+        ext = os.path.splitext(filename)[1]
 
-        if file_name not in translated_map:
-            report_data.append({"File Name": file_name, "Language": "", "Error Type": "Missing Target File", "Error Details": f"{file_name} not uploaded in target", "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
-            continue
+        path = os.path.join(temp_dir, filename)
+        src.save(path)
 
-        tgt = translated_map[file_name]
-
-        # Load source
-        if file_name.endswith('.json'):
-            source_data, err = load_json(src)
-            if err:
-                report_data.append({"File Name": file_name, "Language": "", "Error Type": "JSON Error", "Error Details": err, "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
-                continue
-            translated_data, t_err = load_json(tgt)
+        if ext == '.json':
+            data, err = load_json_from_path(path)
         else:
-            source_data, err = load_properties(src)
-            if err:
-                report_data.append({"File Name": file_name, "Language": "", "Error Type": "Properties Error", "Error Details": err, "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
-                continue
-            translated_data, t_err = load_properties(tgt)
+            data, err = load_properties_from_path(path)
 
-        if t_err:
-            report_data.append({"File Name": file_name, "Language": "", "Error Type": "Target File Error", "Error Details": t_err, "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
+        if err:
+            report_data.append({"File Name": filename, "Language": "", "Error Type": "Source Error", "Error Details": err, "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
             continue
 
-        result = compare_files(source_data, translated_data, "Uploaded", file_name)
-        report_data.append(result)
+        source_map[norm] = (filename, data)
+
+    # Loop over language folders in ZIP
+    for lang in os.listdir(translated_dir):
+        lang_path = os.path.join(translated_dir, lang)
+        if not os.path.isdir(lang_path):
+            continue
+
+        for file in os.listdir(lang_path):
+            tgt_path = os.path.join(lang_path, file)
+            norm = normalize_filename(file)
+            ext = os.path.splitext(file)[1]
+
+            if norm not in source_map:
+                report_data.append({"File Name": file, "Language": lang, "Error Type": "No matching source file", "Error Details": f"{file} unmatched", "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
+                continue
+
+            src_filename, source_data = source_map[norm]
+
+            if ext == '.json':
+                tgt_data, err = load_json_from_path(tgt_path)
+            else:
+                tgt_data, err = load_properties_from_path(tgt_path)
+
+            if err:
+                report_data.append({"File Name": file, "Language": lang, "Error Type": "Target Error", "Error Details": err, "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
+                continue
+
+            result = compare_files(source_data, tgt_data, lang, file)
+            report_data.append(result)
 
     output_path = os.path.join(temp_dir, "Comparison_Report.xlsx")
     pd.DataFrame(report_data).to_excel(output_path, index=False)
