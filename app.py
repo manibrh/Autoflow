@@ -85,7 +85,7 @@ def process():
                 if process_type == 'preprocess':
                     errors = run_legacy_preprocessing(input_dir, output_dir)
                 else:
-                    run_legacy_postprocess(input_dir, output_dir)
+                    run_legacy_postprocessing(input_dir, output_dir)
                     errors = []
 
             # Clear and prepare TEMP_OUTPUT
