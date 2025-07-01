@@ -1,27 +1,24 @@
-# final_compare.py with ZIP and normalized filename matching
 import os
 import json
 import re
 import tempfile
 import pandas as pd
 import zipfile
-from werkzeug.datastructures import FileStorage
 
 PLACEHOLDER_PATTERN = re.compile(
-    r'\?"\{[^{}]+\}\?"|'  # Matches "{placeholder}"
-    r'\{\d+\}|'             # Matches {0}, {1}
-    r'\{\{.*?\}\}|'        # Matches {{placeholder}}
-    r'\{[^{}]+\}|'          # Matches {placeholder}
-    r'\{[^{}]*|'             # Incomplete
-    r'<[^>]+>|'              # <tag>
-    r'%\w+|'                 # %s
-    r'\$\w+'                # $variable
+    r'\\?"\{[^{}]+\}\\?"|'
+    r'\{\d+\}|'
+    r'\{\{.*?\}\}|'
+    r'\{[^{}]+\}|'
+    r'\{[^{}]*|'
+    r'<[^>]+>|'
+    r'%\w+|'
+    r'\$\w+'
 )
 
 def normalize_filename(name):
-    name = os.path.splitext(name)[0]  # remove .json/.properties
+    name = os.path.splitext(name)[0]
     parts = re.split(r'[-_.]', name)
-    # Remove last segment if it looks like a language (e.g., 'en', 'hi-IN', 'Tamil')
     if len(parts) > 1 and re.match(r'^[a-zA-Z]{2,}(-[a-zA-Z]{2,})?$', parts[-1]):
         parts.pop()
     return '-'.join(parts)
@@ -32,10 +29,9 @@ def load_properties_from_path(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#'):
-                    if '=' in line:
-                        key, value = line.split('=', 1)
-                        props[key.strip()] = value.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    props[key.strip()] = value.strip()
         return props, None
     except Exception as e:
         return None, str(e)
@@ -85,11 +81,9 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
     temp_dir = tempfile.mkdtemp()
     translated_dir = os.path.join(temp_dir, "translated")
 
-    # Extract ZIP
     with zipfile.ZipFile(translated_zip_file, 'r') as zip_ref:
         zip_ref.extractall(translated_dir)
 
-    # Build mapping: {normalized_name: (source_filename, source_data)}
     source_map = {}
     for src in source_files:
         filename = src.filename
@@ -105,12 +99,12 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             data, err = load_properties_from_path(path)
 
         if err:
-            report_data.append({"File Name": filename, "Language": "", "Error Type": "Source Error", "Error Details": err, "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
+            report_data.append({"File Name": filename, "Language": "", "Error Type": "Source Error", "Error Details": err,
+                                "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
             continue
 
         source_map[norm] = (filename, data)
 
-    # Loop over language folders in ZIP
     for lang in os.listdir(translated_dir):
         lang_path = os.path.join(translated_dir, lang)
         if not os.path.isdir(lang_path):
@@ -122,7 +116,8 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             ext = os.path.splitext(file)[1]
 
             if norm not in source_map:
-                report_data.append({"File Name": file, "Language": lang, "Error Type": "No matching source file", "Error Details": f"{file} unmatched", "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
+                report_data.append({"File Name": file, "Language": lang, "Error Type": "No matching source file", "Error Details": f"{file} unmatched",
+                                    "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
                 continue
 
             src_filename, source_data = source_map[norm]
@@ -133,7 +128,8 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                 tgt_data, err = load_properties_from_path(tgt_path)
 
             if err:
-                report_data.append({"File Name": file, "Language": lang, "Error Type": "Target Error", "Error Details": err, "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
+                report_data.append({"File Name": file, "Language": lang, "Error Type": "Target Error", "Error Details": err,
+                                    "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "", "Quote Structure Mismatches": "", "Untranslated Keys": ""})
                 continue
 
             result = compare_files(source_data, tgt_data, lang, file)
