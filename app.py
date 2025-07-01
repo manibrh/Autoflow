@@ -7,7 +7,7 @@ from flask import Flask, render_template, request, send_file, jsonify
 from tep_preprocess import run_tep_preprocessing
 from tep_postprocess import run_tep_postprocessing
 from legacy_preprocess import run_legacy_preprocessing
-from legacy_postprocess import run_legacy_postprocess
+from legacy_postprocess import run_legacy_postprocessing
 from final_compare import run_final_comparison_from_zip
 
 app = Flask(__name__)
