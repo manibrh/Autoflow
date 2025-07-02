@@ -94,29 +94,41 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
     source_map = {}
     for src in source_files:
         filename = src.filename
-        cleaned = clean_filename_for_match(filename)
-        ext = os.path.splitext(filename)[1]
+        ext = os.path.splitext(filename)[1].lower()
+        cleaned = f"{clean_filename_for_match(filename)}{ext}"
         path = os.path.join(temp_dir, filename)
         src.save(path)
 
-        data, err = (load_json_from_path(path) if ext == '.json' else load_properties_from_path(path))
+        if ext == '.json':
+            data, err = load_json_from_path(path)
+        elif ext == '.properties':
+            data, err = load_properties_from_path(path)
+        else:
+            err = f"Unsupported file type: {ext}"
+            data = None
+
         if err:
             report_data.append({
-                "File Name": filename, "Language": "", "Error Type": "Source Error", "Error Details": err,
+                "File Name": filename,
+                "Language": "",
+                "Error Type": "Source Error",
+                "Error Details": err,
                 "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
                 "Quote Structure Mismatches": "", "Untranslated Keys": ""
             })
             continue
+
         source_map[cleaned] = (filename, data)
 
     for lang in os.listdir(translated_dir):
         lang_path = os.path.join(translated_dir, lang)
         if not os.path.isdir(lang_path):
             continue
+
         for file in os.listdir(lang_path):
             tgt_path = os.path.join(lang_path, file)
-            cleaned_tgt = clean_filename_for_match(file)
-            ext = os.path.splitext(file)[1]
+            ext = os.path.splitext(file)[1].lower()
+            cleaned_tgt = f"{clean_filename_for_match(file)}{ext}"
 
             if cleaned_tgt in source_map:
                 src_filename, source_data = source_map[cleaned_tgt]
@@ -129,27 +141,38 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                         break
                 if not matched:
                     report_data.append({
-                        "File Name": file, "Language": lang, "Error Type": "No matching source file",
+                        "File Name": file,
+                        "Language": lang,
+                        "Error Type": "No matching source file",
                         "Error Details": f"{file} unmatched",
                         "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
                         "Quote Structure Mismatches": "", "Untranslated Keys": ""
                     })
                     continue
 
-            tgt_data, err = (load_json_from_path(tgt_path) if ext == '.json' else load_properties_from_path(tgt_path))
+            if ext == '.json':
+                tgt_data, err = load_json_from_path(tgt_path)
+            elif ext == '.properties':
+                tgt_data, err = load_properties_from_path(tgt_path)
+            else:
+                err = f"Unsupported file type: {ext}"
+                tgt_data = None
+
             if err:
                 report_data.append({
-                    "File Name": file, "Language": lang, "Error Type": "Target Error",
+                    "File Name": file,
+                    "Language": lang,
+                    "Error Type": "Target Error",
                     "Error Details": err,
                     "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
                     "Quote Structure Mismatches": "", "Untranslated Keys": ""
                 })
                 continue
 
-        result = compare_files(source_data, tgt_data, lang, file)
-        report_data.append(result)
+            result = compare_files(source_data, tgt_data, lang, file)
+            report_data.append(result)
 
-    # ✅ Correct indentation here
+    # Save report
     token = str(uuid.uuid4())
     date_str = datetime.now().strftime("%d-%b-%Y")
     report_name = f"Comparison_Report_{date_str}.xlsx"
