@@ -7,7 +7,6 @@ import zipfile
 import uuid
 from datetime import datetime
 
-# Placeholder detection
 PLACEHOLDER_PATTERN = re.compile(
     r'\\?"\{[^{}]+\}\\?"|'
     r'\{\d+\}|'
@@ -19,21 +18,13 @@ PLACEHOLDER_PATTERN = re.compile(
     r'\$\w+'
 )
 
-# Helper: get cleaned filename key
+# ✅ Improved matching logic
 def clean_filename_for_match(name):
     base = os.path.splitext(name)[0]
-    parts = re.split(r'[-_.]', base)
-    if len(parts) > 1:
-        last = parts[-1]
-        if (
-            len(last) <= 7 and (
-                last.istitle() or last.islower() or re.fullmatch(r'[a-z]{2}(-[A-Z]{2})?', last)
-            )
-        ):
-            parts.pop()
-    return '-'.join(parts).lower()
+    base = re.sub(r'\s*\(\d+\)$', '', base)  # remove (1), (2)
+    base = re.sub(r'[-_](?:[a-z]{2}(?:-[A-Z]{2})?|[A-Za-z]+)$', '', base)  # remove lang code or name
+    return re.sub(r'[^a-zA-Z0-9]', '', base).lower()
 
-# Loaders
 def load_properties_from_path(file_path):
     props = {}
     try:
@@ -53,19 +44,19 @@ def load_json_from_path(file_path):
     except Exception as e:
         return None, str(e)
 
-# 🔍 Detect spacing context of each placeholder
-def get_placeholder_spacing_map(text):
-    spacing_map = {}
-    matches = list(re.finditer(r'(\s*)({{[^{}]+}})(\s*)', text))
-    for match in matches:
-        placeholder = match.group(2)
-        spacing_map[placeholder] = {
-            "before": bool(match.group(1)),
-            "after": bool(match.group(3))
-        }
-    return spacing_map
+def check_spacing_mismatches(src_str, tgt_str):
+    # Check for missing spaces before/after placeholders (basic check)
+    spacing_issues = []
+    src_placeholders = PLACEHOLDER_PATTERN.findall(src_str)
+    for ph in src_placeholders:
+        if ph in tgt_str:
+            idx = tgt_str.find(ph)
+            if idx > 0 and tgt_str[idx-1].isalnum():
+                spacing_issues.append(ph)
+            if idx + len(ph) < len(tgt_str) and tgt_str[idx + len(ph)].isalnum():
+                spacing_issues.append(ph)
+    return list(set(spacing_issues))
 
-# 🔁 Core comparison
 def compare_files(source_data, translated_data, lang, file_name):
     missing_keys, extra_keys = [], []
     placeholder_mismatches, quote_mismatches, untranslated_keys = [], [], []
@@ -75,22 +66,16 @@ def compare_files(source_data, translated_data, lang, file_name):
         if key not in translated_data:
             missing_keys.append(key)
         else:
-            src_val, trans_val = source_data[key], translated_data[key]
-            if isinstance(src_val, str) != isinstance(trans_val, str):
+            src_val, tgt_val = source_data[key], translated_data[key]
+            if isinstance(src_val, str) != isinstance(tgt_val, str):
                 quote_mismatches.append(key)
-            src_str, trans_str = str(src_val).strip(), str(trans_val).strip()
-            if src_str == trans_str:
+            src_str, tgt_str = str(src_val).strip(), str(tgt_val).strip()
+            if src_str == tgt_str:
                 untranslated_keys.append(key)
-            if set(PLACEHOLDER_PATTERN.findall(src_str)) != set(PLACEHOLDER_PATTERN.findall(trans_str)):
+            if set(PLACEHOLDER_PATTERN.findall(src_str)) != set(PLACEHOLDER_PATTERN.findall(tgt_str)):
                 placeholder_mismatches.append(key)
-
-            # 🆕 Spacing mismatch logic
-            src_spacing = get_placeholder_spacing_map(src_str)
-            tgt_spacing = get_placeholder_spacing_map(trans_str)
-            for ph in src_spacing:
-                if ph in tgt_spacing:
-                    if src_spacing[ph] != tgt_spacing[ph]:
-                        spacing_mismatches.append(key + f" ({ph})")
+            if check_spacing_mismatches(src_str, tgt_str):
+                spacing_mismatches.append(key)
 
     for key in translated_data:
         if key not in source_data:
@@ -99,11 +84,8 @@ def compare_files(source_data, translated_data, lang, file_name):
     return {
         "Language": lang,
         "File Name": file_name,
-        "Error Type": "",
-        "Error Details": "No issues found" if not any([
-            missing_keys, extra_keys, placeholder_mismatches,
-            quote_mismatches, untranslated_keys, spacing_mismatches
-        ]) else "",
+        "Error Type": "" if not any([missing_keys, extra_keys, placeholder_mismatches, quote_mismatches, untranslated_keys, spacing_mismatches]) else "File Issues",
+        "Error Details": "No issues found" if not any([missing_keys, extra_keys, placeholder_mismatches, quote_mismatches, untranslated_keys, spacing_mismatches]) else "",
         "Missing Keys": ", ".join(missing_keys),
         "Extra Keys": ", ".join(extra_keys),
         "Placeholder Mismatches": ", ".join(placeholder_mismatches),
@@ -112,7 +94,6 @@ def compare_files(source_data, translated_data, lang, file_name):
         "Spacing Mismatches": ", ".join(spacing_mismatches)
     }
 
-# 🔄 Run comparison from uploaded zip
 def run_final_comparison_from_zip(source_files, translated_zip_file):
     report_data = []
     temp_dir = tempfile.mkdtemp()
@@ -144,8 +125,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                 "Error Type": "Source Error",
                 "Error Details": err,
                 "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
-                "Quote Structure Mismatches": "", "Untranslated Keys": "",
-                "Spacing Mismatches": ""
+                "Quote Structure Mismatches": "", "Untranslated Keys": "", "Spacing Mismatches": ""
             })
             continue
 
@@ -177,8 +157,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                         "Error Type": "No matching source file",
                         "Error Details": f"{file} unmatched",
                         "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
-                        "Quote Structure Mismatches": "", "Untranslated Keys": "",
-                        "Spacing Mismatches": ""
+                        "Quote Structure Mismatches": "", "Untranslated Keys": "", "Spacing Mismatches": ""
                     })
                     continue
 
@@ -197,15 +176,14 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                     "Error Type": "Target Error",
                     "Error Details": err,
                     "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
-                    "Quote Structure Mismatches": "", "Untranslated Keys": "",
-                    "Spacing Mismatches": ""
+                    "Quote Structure Mismatches": "", "Untranslated Keys": "", "Spacing Mismatches": ""
                 })
                 continue
 
             result = compare_files(source_data, tgt_data, lang, file)
             report_data.append(result)
 
-    # Save Excel report
+    # Save report
     token = str(uuid.uuid4())
     date_str = datetime.now().strftime("%d-%b-%Y")
     report_name = f"Comparison_Report_{date_str}.xlsx"
