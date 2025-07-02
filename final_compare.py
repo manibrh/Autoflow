@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 
 PLACEHOLDER_PATTERN = re.compile(
-    r'\\?"\{[^{}]+\}\\?"|'
+    r'\?"\{[^{}]+\}\?"|'
     r'\{\d+\}|'
     r'\{\{.*?\}\}|'
     r'\{[^{}]+\}|'
@@ -18,11 +18,10 @@ PLACEHOLDER_PATTERN = re.compile(
     r'\$\w+'
 )
 
-# ✅ Improved matching logic
 def clean_filename_for_match(name):
     base = os.path.splitext(name)[0]
-    base = re.sub(r'\s*\(\d+\)$', '', base)  # remove (1), (2)
-    base = re.sub(r'[-_](?:[a-z]{2}(?:-[A-Z]{2})?|[A-Za-z]+)$', '', base)  # remove lang code or name
+    base = re.sub(r'\s*\(\d+\)$', '', base)
+    base = re.sub(r'[-_](?:[a-z]{2}(?:-[A-Z]{2})?|[A-Za-z]+)$', '', base)
     return re.sub(r'[^a-zA-Z0-9]', '', base).lower()
 
 def load_properties_from_path(file_path):
@@ -45,7 +44,6 @@ def load_json_from_path(file_path):
         return None, str(e)
 
 def check_spacing_mismatches(src_str, tgt_str):
-    # Check for missing spaces before/after placeholders (basic check)
     spacing_issues = []
     src_placeholders = PLACEHOLDER_PATTERN.findall(src_str)
     for ph in src_placeholders:
@@ -58,44 +56,45 @@ def check_spacing_mismatches(src_str, tgt_str):
     return list(set(spacing_issues))
 
 def compare_files(source_data, translated_data, lang, file_name):
-    missing_keys, extra_keys = [], []
-    placeholder_mismatches, quote_mismatches, untranslated_keys = [], [], []
-    spacing_mismatches = []
+    report_data = []
 
-    for key in source_data:
-        if key not in translated_data:
-            missing_keys.append(key)
+    for key in set(source_data.keys()).union(translated_data.keys()):
+        issue_type = ""
+        src_val = source_data.get(key, "")
+        tgt_val = translated_data.get(key, "")
+
+        if key not in source_data:
+            issue_type = "Extra Key"
+        elif key not in translated_data:
+            issue_type = "Missing Key"
+        elif isinstance(src_val, str) != isinstance(tgt_val, str):
+            issue_type = "Quote Structure Mismatch"
         else:
-            src_val, tgt_val = source_data[key], translated_data[key]
-            if isinstance(src_val, str) != isinstance(tgt_val, str):
-                quote_mismatches.append(key)
             src_str, tgt_str = str(src_val).strip(), str(tgt_val).strip()
             if src_str == tgt_str:
-                untranslated_keys.append(key)
-            if set(PLACEHOLDER_PATTERN.findall(src_str)) != set(PLACEHOLDER_PATTERN.findall(tgt_str)):
-                placeholder_mismatches.append(key)
-            if check_spacing_mismatches(src_str, tgt_str):
-                spacing_mismatches.append(key)
+                issue_type = "Untranslated Key"
+            elif set(PLACEHOLDER_PATTERN.findall(src_str)) != set(PLACEHOLDER_PATTERN.findall(tgt_str)):
+                issue_type = "Placeholder Mismatch"
+            elif check_spacing_mismatches(src_str, tgt_str):
+                issue_type = "Spacing Mismatch"
 
-    for key in translated_data:
-        if key not in source_data:
-            extra_keys.append(key)
+        if issue_type:
+            report_data.append({
+                "File Name": file_name,
+                "Language": lang,
+                "Issue Type": issue_type,
+                "Key": key,
+                "Source": source_data.get(key, ""),
+                "Target": translated_data.get(key, "")
+            })
 
-    return {
-        "Language": lang,
-        "File Name": file_name,
-        "Error Type": "" if not any([missing_keys, extra_keys, placeholder_mismatches, quote_mismatches, untranslated_keys, spacing_mismatches]) else "File Issues",
-        "Error Details": "No issues found" if not any([missing_keys, extra_keys, placeholder_mismatches, quote_mismatches, untranslated_keys, spacing_mismatches]) else "",
-        "Missing Keys": ", ".join(missing_keys),
-        "Extra Keys": ", ".join(extra_keys),
-        "Placeholder Mismatches": ", ".join(placeholder_mismatches),
-        "Quote Structure Mismatches": ", ".join(quote_mismatches),
-        "Untranslated Keys": ", ".join(untranslated_keys),
-        "Spacing Mismatches": ", ".join(spacing_mismatches)
-    }
+    if not report_data:
+        report_data.append({"File Name": file_name, "Language": lang, "Issue Type": "No issues found", "Key": "", "Source": "", "Target": ""})
+
+    return report_data
 
 def run_final_comparison_from_zip(source_files, translated_zip_file):
-    report_data = []
+    all_report_rows = []
     temp_dir = tempfile.mkdtemp()
     translated_dir = os.path.join(temp_dir, "translated")
 
@@ -119,14 +118,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             data = None
 
         if err:
-            report_data.append({
-                "File Name": filename,
-                "Language": "",
-                "Error Type": "Source Error",
-                "Error Details": err,
-                "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
-                "Quote Structure Mismatches": "", "Untranslated Keys": "", "Spacing Mismatches": ""
-            })
+            all_report_rows.append({"File Name": filename, "Language": "", "Issue Type": "Source Error", "Key": err, "Source": "", "Target": ""})
             continue
 
         source_map[cleaned] = (filename, data)
@@ -151,14 +143,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                         matched = True
                         break
                 if not matched:
-                    report_data.append({
-                        "File Name": file,
-                        "Language": lang,
-                        "Error Type": "No matching source file",
-                        "Error Details": f"{file} unmatched",
-                        "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
-                        "Quote Structure Mismatches": "", "Untranslated Keys": "", "Spacing Mismatches": ""
-                    })
+                    all_report_rows.append({"File Name": file, "Language": lang, "Issue Type": "No matching source file", "Key": f"{file} unmatched", "Source": "", "Target": ""})
                     continue
 
             if ext == '.json':
@@ -170,24 +155,25 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                 tgt_data = None
 
             if err:
-                report_data.append({
-                    "File Name": file,
-                    "Language": lang,
-                    "Error Type": "Target Error",
-                    "Error Details": err,
-                    "Missing Keys": "", "Extra Keys": "", "Placeholder Mismatches": "",
-                    "Quote Structure Mismatches": "", "Untranslated Keys": "", "Spacing Mismatches": ""
-                })
+                all_report_rows.append({"File Name": file, "Language": lang, "Issue Type": "Target Error", "Key": err, "Source": "", "Target": ""})
                 continue
 
-            result = compare_files(source_data, tgt_data, lang, file)
-            report_data.append(result)
+            file_issues = compare_files(source_data, tgt_data, lang, file)
+            all_report_rows.extend(file_issues)
 
-    # Save report
     token = str(uuid.uuid4())
     date_str = datetime.now().strftime("%d-%b-%Y")
     report_name = f"Comparison_Report_{date_str}.xlsx"
     output_path = os.path.join(tempfile.gettempdir(), f"{token}__{report_name}")
-    pd.DataFrame(report_data).to_excel(output_path, index=False)
 
-    return output_path, token, report_name, report_data
+    df = pd.DataFrame(all_report_rows)
+    with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Report', index=False)
+        workbook = writer.book
+        worksheet = writer.sheets['Report']
+        wrap_format = workbook.add_format({'text_wrap': True, 'valign': 'top'})
+        for i, col in enumerate(df.columns):
+            width = max(df[col].astype(str).map(len).max(), len(col)) + 5
+            worksheet.set_column(i, i, width, wrap_format)
+
+    return output_path, token, report_name, all_report_rows
