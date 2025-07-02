@@ -16,6 +16,12 @@
     th, td {
       white-space: nowrap;
     }
+    .truncate {
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -23,8 +29,19 @@
   <h3 class="mb-4">🧾 Final Comparison Report</h3>
 
   {% if rows and headers %}
+    <div class="mb-3">
+      <label for="filterType" class="form-label">🔍 Filter by Issue Type</label>
+      <select id="filterType" class="form-select w-auto d-inline-block">
+        <option value="">All</option>
+        {% for type in headers if type == 'Issue Type' %}{% endfor %}
+        {% for row in rows | unique(attribute=2) %}
+          <option value="{{ row[2] }}">{{ row[2] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
     <div class="table-responsive mb-4 border rounded">
-      <table class="table table-bordered table-hover table-sm align-middle">
+      <table class="table table-bordered table-hover table-sm align-middle" id="resultsTable">
         <thead class="table-light">
           <tr>
             <th>#</th>
@@ -35,10 +52,10 @@
         </thead>
         <tbody>
           {% for row in rows %}
-            <tr>
+            <tr data-issue="{{ row[2] }}">
               <td>{{ loop.index }}</td>
               {% for col in row %}
-                <td>{{ col or '' }}</td>
+                <td class="truncate" title="{{ col }}">{{ col or '' }}</td>
               {% endfor %}
             </tr>
           {% endfor %}
@@ -66,6 +83,15 @@
       if (spinner) spinner.style.display = 'inline-block';
     });
   }
+
+  document.getElementById('filterType')?.addEventListener('change', function() {
+    const selected = this.value;
+    const rows = document.querySelectorAll('#resultsTable tbody tr');
+    rows.forEach(row => {
+      const issue = row.getAttribute('data-issue');
+      row.style.display = !selected || issue === selected ? '' : 'none';
+    });
+  });
 </script>
 </body>
 </html>
