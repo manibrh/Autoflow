@@ -22,6 +22,12 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #f8f9fa;
+      z-index: 1;
+    }
   </style>
 </head>
 <body>
@@ -33,7 +39,6 @@
       <label for="filterType" class="form-label">🔍 Filter by Issue Type</label>
       <select id="filterType" class="form-select w-auto d-inline-block">
         <option value="">All</option>
-        {% for type in headers if type == 'Issue Type' %}{% endfor %}
         {% for row in rows | unique(attribute=2) %}
           <option value="{{ row[2] }}">{{ row[2] }}</option>
         {% endfor %}
@@ -46,7 +51,10 @@
           <tr>
             <th>#</th>
             {% for h in headers %}
-              <th>{{ h }}</th>
+              <th>
+                {{ h }}
+                <input type="text" class="form-control form-control-sm mt-1 column-filter" data-col="{{ loop.index0 }}" placeholder="🔍">
+              </th>
             {% endfor %}
           </tr>
         </thead>
@@ -84,12 +92,31 @@
     });
   }
 
-  document.getElementById('filterType')?.addEventListener('change', function() {
+  // Filter by issue type dropdown
+  document.getElementById('filterType')?.addEventListener('change', function () {
     const selected = this.value;
     const rows = document.querySelectorAll('#resultsTable tbody tr');
     rows.forEach(row => {
       const issue = row.getAttribute('data-issue');
       row.style.display = !selected || issue === selected ? '' : 'none';
+    });
+  });
+
+  // Column-wise filtering
+  document.querySelectorAll('.column-filter').forEach(input => {
+    input.addEventListener('input', () => {
+      const filters = Array.from(document.querySelectorAll('.column-filter')).map(i => i.value.toLowerCase());
+      const rows = document.querySelectorAll('#resultsTable tbody tr');
+      rows.forEach(row => {
+        const cols = row.querySelectorAll('td');
+        let show = true;
+        filters.forEach((filter, index) => {
+          if (filter && !cols[index + 1]?.textContent.toLowerCase().includes(filter)) {
+            show = false;
+          }
+        });
+        row.style.display = show ? '' : 'none';
+      });
     });
   });
 </script>
