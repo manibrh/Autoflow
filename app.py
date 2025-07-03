@@ -35,13 +35,14 @@ def final_compare():
         if not source_files or not translated_zip:
             return render_template("error.html", message="Missing source files or translated ZIP")
 
-        # ✅ Updated to capture full report data including spacing mismatches
         output_path, token, report_name, report_data = run_final_comparison_from_zip(source_files, translated_zip)
 
-        # ✅ Create headers and rows for preview table
-        df = pd.DataFrame(report_data)
-        headers = df.columns.tolist()
-        rows = df.fillna('').values.tolist()
+        # Updated row and header structure for table with "Details" column
+        headers = ["File Name", "Language", "Issue Type", "Key", "Source", "Target", "Details"]
+        rows = [[
+            r.get("File Name", ""), r.get("Language", ""), r.get("Issue Type", ""),
+            r.get("Key", ""), r.get("Source", ""), r.get("Target", ""), r.get("Details", "")
+        ] for r in report_data]
 
         return render_template("compare_results.html", headers=headers, rows=rows,
                                report_url=f"/temp_download/{token}", report_name=report_name)
@@ -110,7 +111,7 @@ def process():
                 shutil.rmtree(TEMP_OUTPUT)
             shutil.copytree(output_dir, TEMP_OUTPUT)
 
-            # Create ZIP
+            # Create batch.zip
             zip_path = os.path.join(TEMP_OUTPUT, "batch.zip")
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for root, _, files in os.walk(TEMP_OUTPUT):
