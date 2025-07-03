@@ -60,14 +60,14 @@ def check_spacing_mismatches(src_str, tgt_str):
         if ph in tgt_str:
             idx = tgt_str.find(ph)
             if idx > 0 and tgt_str[idx - 1].isalnum():
-                issues.append(f"No space before {ph}")
+                issues.append(("Spacing Mismatch", f"No space before {ph}"))
             if idx + len(ph) < len(tgt_str) and tgt_str[idx + len(ph)].isalnum():
-                issues.append(f"No space after {ph}")
+                issues.append(("Spacing Mismatch", f"No space after {ph}"))
 
     # Run language-specific spacing rules
     for pattern, label in SPACING_RULES:
         if pattern.search(tgt_str):
-            issues.append(label)
+            issues.append(("Spacing Mismatch", label))
 
     return list(set(issues))
 
@@ -75,39 +75,39 @@ def compare_files(source_data, translated_data, lang, file_name):
     report_data = []
 
     for key in set(source_data.keys()).union(translated_data.keys()):
-        issue_type = ""
+        issues = []
         src_val = source_data.get(key, "")
         tgt_val = translated_data.get(key, "")
 
         if key not in source_data:
-            issue_type = "Extra Key"
+            issues.append(("Extra Key", "Key is present in target but missing in source."))
         elif key not in translated_data:
-            issue_type = "Missing Key"
+            issues.append(("Missing Key", "Key is present in source but missing in target."))
         elif isinstance(src_val, str) != isinstance(tgt_val, str):
-            issue_type = "Quote Structure Mismatch"
+            issues.append(("Quote Structure Mismatch", "Source and target value types do not match (e.g., string vs non-string)."))
         else:
             src_str, tgt_str = str(src_val).strip(), str(tgt_val).strip()
             if src_str == tgt_str:
-                issue_type = "Untranslated Key"
+                issues.append(("Untranslated Key", "Source and target values are identical; translation may be missing."))
             elif set(PLACEHOLDER_PATTERN.findall(src_str)) != set(PLACEHOLDER_PATTERN.findall(tgt_str)):
-                issue_type = "Placeholder Mismatch"
+                issues.append(("Placeholder Mismatch", "Mismatch in placeholder usage between source and target."))
             else:
-                spacing = check_spacing_mismatches(src_str, tgt_str)
-                if spacing:
-                    issue_type = ", ".join(spacing)
+                spacing_issues = check_spacing_mismatches(src_str, tgt_str)
+                issues.extend(spacing_issues)
 
-        if issue_type:
+        for issue_type, explanation in issues:
             report_data.append({
                 "File Name": file_name,
                 "Language": lang,
                 "Issue Type": issue_type,
                 "Key": key,
-                "Source": source_data.get(key, ""),
-                "Target": translated_data.get(key, "")
+                "Source": src_val,
+                "Target": tgt_val,
+                "Details": explanation
             })
 
     if not report_data:
-        report_data.append({"File Name": file_name, "Language": lang, "Issue Type": "No issues found", "Key": "", "Source": "", "Target": ""})
+        report_data.append({"File Name": file_name, "Language": lang, "Issue Type": "No issues found", "Key": "", "Source": "", "Target": "", "Details": ""})
 
     return report_data
 
@@ -136,7 +136,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             data = None
 
         if err:
-            all_report_rows.append({"File Name": filename, "Language": "", "Issue Type": "Source Error", "Key": err, "Source": "", "Target": ""})
+            all_report_rows.append({"File Name": filename, "Language": "", "Issue Type": "Source Error", "Key": err, "Source": "", "Target": "", "Details": ""})
             continue
 
         source_map[cleaned] = (filename, data)
@@ -161,7 +161,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                         matched = True
                         break
                 if not matched:
-                    all_report_rows.append({"File Name": file, "Language": lang, "Issue Type": "No matching source file", "Key": f"{file} unmatched", "Source": "", "Target": ""})
+                    all_report_rows.append({"File Name": file, "Language": lang, "Issue Type": "No matching source file", "Key": f"{file} unmatched", "Source": "", "Target": "", "Details": ""})
                     continue
 
             if ext == '.json':
@@ -173,7 +173,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                 tgt_data = None
 
             if err:
-                all_report_rows.append({"File Name": file, "Language": lang, "Issue Type": "Target Error", "Key": err, "Source": "", "Target": ""})
+                all_report_rows.append({"File Name": file, "Language": lang, "Issue Type": "Target Error", "Key": err, "Source": "", "Target": "", "Details": ""})
                 continue
 
             file_issues = compare_files(source_data, tgt_data, lang, file)
