@@ -7,16 +7,25 @@ import zipfile
 import uuid
 from datetime import datetime
 
+# Improved multilingual placeholder & spacing pattern
 PLACEHOLDER_PATTERN = re.compile(
-    r'\?"\{[^{}]+\}\?"|'
-    r'\{\d+\}|'
-    r'\{\{.*?\}\}|'
-    r'\{[^{}]+\}|'
-    r'\{[^{}]*|'
-    r'<[^>]+>|'
-    r'%\w+|'
-    r'\$\w+'
+    r'\?"\{[^{}]+\}\?"|'  # quoted placeholders
+    r'\{\d+\}|'             # {0}, {1}
+    r'\{\{.*?\}\}|'        # {{...}}
+    r'\{[^{}]+\}|'           # {name}
+    r'<[^>]+>|'               # <tag>
+    r'%\w+|'                  # %s, %d
+    r'\$\w+'                 # $var
 )
+
+# Additional spacing mismatch rules
+SPACING_RULES = [
+    (re.compile(r'[\u0B80-\u0BFF][{]{2}'), "Missing space before placeholder"),
+    (re.compile(r'[}]{2}[\u0B80-\u0BFF]'), "Missing space after placeholder"),
+    (re.compile(r'[.!?:][^\s{<]'), "Missing space after punctuation"),
+    (re.compile(r'}}[^\s{<]'), "Missing space after closing tag"),
+    (re.compile(r'\d[\u0B80-\u0BFF\w]'), "Missing space between number and word")
+]
 
 def clean_filename_for_match(name):
     base = os.path.splitext(name)[0]
@@ -44,16 +53,23 @@ def load_json_from_path(file_path):
         return None, str(e)
 
 def check_spacing_mismatches(src_str, tgt_str):
-    spacing_issues = []
+    issues = []
+    # Check placeholder boundary spacing
     src_placeholders = PLACEHOLDER_PATTERN.findall(src_str)
     for ph in src_placeholders:
         if ph in tgt_str:
             idx = tgt_str.find(ph)
-            if idx > 0 and tgt_str[idx-1].isalnum():
-                spacing_issues.append(ph)
+            if idx > 0 and tgt_str[idx - 1].isalnum():
+                issues.append(f"No space before {ph}")
             if idx + len(ph) < len(tgt_str) and tgt_str[idx + len(ph)].isalnum():
-                spacing_issues.append(ph)
-    return list(set(spacing_issues))
+                issues.append(f"No space after {ph}")
+
+    # Run language-specific spacing rules
+    for pattern, label in SPACING_RULES:
+        if pattern.search(tgt_str):
+            issues.append(label)
+
+    return list(set(issues))
 
 def compare_files(source_data, translated_data, lang, file_name):
     report_data = []
@@ -75,8 +91,10 @@ def compare_files(source_data, translated_data, lang, file_name):
                 issue_type = "Untranslated Key"
             elif set(PLACEHOLDER_PATTERN.findall(src_str)) != set(PLACEHOLDER_PATTERN.findall(tgt_str)):
                 issue_type = "Placeholder Mismatch"
-            elif check_spacing_mismatches(src_str, tgt_str):
-                issue_type = "Spacing Mismatch"
+            else:
+                spacing = check_spacing_mismatches(src_str, tgt_str)
+                if spacing:
+                    issue_type = ", ".join(spacing)
 
         if issue_type:
             report_data.append({
