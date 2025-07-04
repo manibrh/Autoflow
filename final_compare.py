@@ -8,13 +8,13 @@ import uuid
 from datetime import datetime
 
 PLACEHOLDER_PATTERN = re.compile(
-    r'\?"\{[^{}]+\}\?"|'    # quoted placeholders
-    r'\{\d+\}|'             
-    r'\{\{.*?\}\}|'         
-    r'\{[^{}]+\}|'          
-    r'<[^>]+>|'             
-    r'%\w+|'                
-    r'\$\w+'                
+    r'\?"\{[^{}]+\}\?"|'
+    r'\{\d+\}|'
+    r'\{\{.*?\}\}|'
+    r'\{[^{}]+\}|'
+    r'<[^>]+>|'
+    r'%\w+|'
+    r'\$\w+'
 )
 
 SPACING_RULES = [
@@ -31,6 +31,12 @@ def clean_filename_for_match(name):
     base = re.sub(r'[-_](?:[a-z]{2}(?:-[A-Z]{2})?|[A-Za-z]+)$', '', base)
     return re.sub(r'[^a-zA-Z0-9]', '', base).lower()
 
+def fix_encoding(s):
+    try:
+        return s.encode('latin1').decode('utf-8')
+    except:
+        return s
+
 def load_properties_from_path(file_path):
     props = {}
     try:
@@ -38,7 +44,7 @@ def load_properties_from_path(file_path):
             for line in f:
                 if line.strip() and '=' in line and not line.startswith('#'):
                     key, val = line.split('=', 1)
-                    props[key.strip()] = val.strip()
+                    props[key.strip()] = fix_encoding(val.strip())
         return props, None
     except Exception as e:
         return None, str(e)
@@ -46,19 +52,34 @@ def load_properties_from_path(file_path):
 def load_json_from_path(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            return json.load(f), None
+            raw_data = f.read()
+            return json.loads(raw_data), None
     except json.JSONDecodeError as e:
-        recovered = {}
         explanation = str(e)
+        line_info = f"line {e.lineno}, column {e.colno}"
+        bad_key = ""
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                if e.lineno - 1 < len(lines):
+                    broken_line = lines[e.lineno - 1].strip()
+                    key_match = re.search(r'"([^"]+)"\s*:', broken_line)
+                    if key_match:
+                        bad_key = key_match.group(1)
+        except:
+            pass
+
+        recovered = {}
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 raw_text = f.read()
                 matches = re.findall(r'"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"', raw_text)
                 for k, v in matches:
-                    recovered[k] = v.encode('utf-8').decode('unicode_escape')
-            return recovered, f"Partial recovery due to JSON error: {explanation}"
+                    recovered[k] = fix_encoding(v.encode('utf-8').decode('unicode_escape'))
+            return recovered, f"{bad_key} - JSON error at {line_info}: {explanation}"
         except Exception as inner:
-            return None, f"Unrecoverable JSON error: {explanation} / {inner}"
+            return None, f"Unrecoverable JSON error at {line_info}: {explanation} / {inner}"
 
 def check_spacing_mismatches(src_str, tgt_str):
     issues = []
@@ -200,8 +221,9 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                     "File Name": file,
                     "Language": lang,
                     "Issue Type": "Target Error",
-                    "Key": err,
-                    "Source": "", "Target": "", "Details": "File partially parsed for issue analysis." if tgt_data else ""
+                    "Key": err.split(" - ")[0] if " - " in err else err,
+                    "Source": "", "Target": "", 
+                    "Details": err if " - " not in err else err.split(" - ")[1]
                 })
                 if not tgt_data:
                     continue
