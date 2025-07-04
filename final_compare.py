@@ -7,18 +7,18 @@ import zipfile
 import uuid
 from datetime import datetime
 
-# Improved multilingual placeholder & spacing pattern
+# Placeholder and formatting patterns
 PLACEHOLDER_PATTERN = re.compile(
-    r'\?"\{[^{}]+\}\?"|'  # quoted placeholders
+    r'\?"\{[^{}]+\}\?"|'    # quoted placeholders
     r'\{\d+\}|'             # {0}, {1}
-    r'\{\{.*?\}\}|'        # {{...}}
-    r'\{[^{}]+\}|'           # {name}
-    r'<[^>]+>|'               # <tag>
-    r'%\w+|'                  # %s, %d
-    r'\$\w+'                 # $var
+    r'\{\{.*?\}\}|'         # {{...}}
+    r'\{[^{}]+\}|'          # {name}
+    r'<[^>]+>|'             # <tag>
+    r'%\w+|'                # %s, %d
+    r'\$\w+'                # $var
 )
 
-# Additional spacing mismatch rules
+# Tamil and punctuation spacing rules
 SPACING_RULES = [
     (re.compile(r'[\u0B80-\u0BFF][{]{2}'), "Missing space before placeholder"),
     (re.compile(r'[}]{2}[\u0B80-\u0BFF]'), "Missing space after placeholder"),
@@ -54,7 +54,6 @@ def load_json_from_path(file_path):
 
 def check_spacing_mismatches(src_str, tgt_str):
     issues = []
-    # Check placeholder boundary spacing
     src_placeholders = PLACEHOLDER_PATTERN.findall(src_str)
     for ph in src_placeholders:
         if ph in tgt_str:
@@ -64,7 +63,6 @@ def check_spacing_mismatches(src_str, tgt_str):
             if idx + len(ph) < len(tgt_str) and tgt_str[idx + len(ph)].isalnum():
                 issues.append(("Spacing Mismatch", f"No space after {ph}"))
 
-    # Run language-specific spacing rules
     for pattern, label in SPACING_RULES:
         if pattern.search(tgt_str):
             issues.append(("Spacing Mismatch", label))
@@ -73,8 +71,9 @@ def check_spacing_mismatches(src_str, tgt_str):
 
 def compare_files(source_data, translated_data, lang, file_name):
     report_data = []
+    all_keys = set(source_data.keys()).union(translated_data.keys())
 
-    for key in set(source_data.keys()).union(translated_data.keys()):
+    for key in all_keys:
         issues = []
         src_val = source_data.get(key, "")
         tgt_val = translated_data.get(key, "")
@@ -84,18 +83,19 @@ def compare_files(source_data, translated_data, lang, file_name):
         elif key not in translated_data:
             issues.append(("Missing Key", "Key is present in source but missing in target."))
         elif isinstance(src_val, str) != isinstance(tgt_val, str):
-            issues.append(("Quote Structure Mismatch", "Source and target value types do not match (e.g., string vs non-string)."))
+            issues.append(("Quote Structure Mismatch", "Source and target value types do not match."))
         else:
-            src_str, tgt_str = str(src_val).strip(), str(tgt_val).strip()
-            if src_str == tgt_str:
-                issues.append(("Untranslated Key", "Source and target values are identical; translation may be missing."))
-            elif set(PLACEHOLDER_PATTERN.findall(src_str)) != set(PLACEHOLDER_PATTERN.findall(tgt_str)):
-                issues.append(("Placeholder Mismatch", "Mismatch in placeholder usage between source and target."))
-            else:
-                spacing_issues = check_spacing_mismatches(src_str, tgt_str)
-                issues.extend(spacing_issues)
+            src_str = str(src_val).strip()
+            tgt_str = str(tgt_val).strip()
 
-        for issue_type, explanation in issues:
+            if src_str == tgt_str:
+                issues.append(("Untranslated Key", "Source and target values are identical."))
+            elif set(PLACEHOLDER_PATTERN.findall(src_str)) != set(PLACEHOLDER_PATTERN.findall(tgt_str)):
+                issues.append(("Placeholder Mismatch", "Mismatch in placeholder usage."))
+            else:
+                issues.extend(check_spacing_mismatches(src_str, tgt_str))
+
+        for issue_type, detail in issues:
             report_data.append({
                 "File Name": file_name,
                 "Language": lang,
@@ -103,11 +103,16 @@ def compare_files(source_data, translated_data, lang, file_name):
                 "Key": key,
                 "Source": src_val,
                 "Target": tgt_val,
-                "Details": explanation
+                "Details": detail
             })
 
     if not report_data:
-        report_data.append({"File Name": file_name, "Language": lang, "Issue Type": "No issues found", "Key": "", "Source": "", "Target": "", "Details": ""})
+        report_data.append({
+            "File Name": file_name,
+            "Language": lang,
+            "Issue Type": "No issues found",
+            "Key": "", "Source": "", "Target": "", "Details": ""
+        })
 
     return report_data
 
@@ -132,11 +137,16 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
         elif ext == '.properties':
             data, err = load_properties_from_path(path)
         else:
-            err = f"Unsupported file type: {ext}"
-            data = None
+            data, err = None, f"Unsupported file type: {ext}"
 
         if err:
-            all_report_rows.append({"File Name": filename, "Language": "", "Issue Type": "Source Error", "Key": err, "Source": "", "Target": "", "Details": ""})
+            all_report_rows.append({
+                "File Name": filename,
+                "Language": "",
+                "Issue Type": "Source Error",
+                "Key": err,
+                "Source": "", "Target": "", "Details": ""
+            })
             continue
 
         source_map[cleaned] = (filename, data)
@@ -161,7 +171,13 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                         matched = True
                         break
                 if not matched:
-                    all_report_rows.append({"File Name": file, "Language": lang, "Issue Type": "No matching source file", "Key": f"{file} unmatched", "Source": "", "Target": "", "Details": ""})
+                    all_report_rows.append({
+                        "File Name": file,
+                        "Language": lang,
+                        "Issue Type": "No matching source file",
+                        "Key": file,
+                        "Source": "", "Target": "", "Details": ""
+                    })
                     continue
 
             if ext == '.json':
@@ -169,15 +185,20 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             elif ext == '.properties':
                 tgt_data, err = load_properties_from_path(tgt_path)
             else:
-                err = f"Unsupported file type: {ext}"
-                tgt_data = None
+                tgt_data, err = None, f"Unsupported file type: {ext}"
 
             if err:
-                all_report_rows.append({"File Name": file, "Language": lang, "Issue Type": "Target Error", "Key": err, "Source": "", "Target": "", "Details": ""})
+                all_report_rows.append({
+                    "File Name": file,
+                    "Language": lang,
+                    "Issue Type": "Target Error",
+                    "Key": err,
+                    "Source": "", "Target": "", "Details": ""
+                })
                 continue
 
-            file_issues = compare_files(source_data, tgt_data, lang, file)
-            all_report_rows.extend(file_issues)
+            issues = compare_files(source_data, tgt_data, lang, file)
+            all_report_rows.extend(issues)
 
     token = str(uuid.uuid4())
     date_str = datetime.now().strftime("%d-%b-%Y")
