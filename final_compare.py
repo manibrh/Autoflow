@@ -7,18 +7,16 @@ import zipfile
 import uuid
 from datetime import datetime
 
-# Placeholder and formatting patterns
 PLACEHOLDER_PATTERN = re.compile(
     r'\?"\{[^{}]+\}\?"|'    # quoted placeholders
-    r'\{\d+\}|'             # {0}, {1}
-    r'\{\{.*?\}\}|'         # {{...}}
-    r'\{[^{}]+\}|'          # {name}
-    r'<[^>]+>|'             # <tag>
-    r'%\w+|'                # %s, %d
-    r'\$\w+'                # $var
+    r'\{\d+\}|'             
+    r'\{\{.*?\}\}|'         
+    r'\{[^{}]+\}|'          
+    r'<[^>]+>|'             
+    r'%\w+|'                
+    r'\$\w+'                
 )
 
-# Tamil and punctuation spacing rules
 SPACING_RULES = [
     (re.compile(r'[\u0B80-\u0BFF][{]{2}'), "Missing space before placeholder"),
     (re.compile(r'[}]{2}[\u0B80-\u0BFF]'), "Missing space after placeholder"),
@@ -49,8 +47,18 @@ def load_json_from_path(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f), None
-    except Exception as e:
-        return None, str(e)
+    except json.JSONDecodeError as e:
+        recovered = {}
+        explanation = str(e)
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                raw_text = f.read()
+                matches = re.findall(r'"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"', raw_text)
+                for k, v in matches:
+                    recovered[k] = v.encode('utf-8').decode('unicode_escape')
+            return recovered, f"Partial recovery due to JSON error: {explanation}"
+        except Exception as inner:
+            return None, f"Unrecoverable JSON error: {explanation} / {inner}"
 
 def check_spacing_mismatches(src_str, tgt_str):
     issues = []
@@ -193,9 +201,10 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                     "Language": lang,
                     "Issue Type": "Target Error",
                     "Key": err,
-                    "Source": "", "Target": "", "Details": ""
+                    "Source": "", "Target": "", "Details": "File partially parsed for issue analysis." if tgt_data else ""
                 })
-                continue
+                if not tgt_data:
+                    continue
 
             issues = compare_files(source_data, tgt_data, lang, file)
             all_report_rows.extend(issues)
