@@ -7,6 +7,7 @@ import zipfile
 import uuid
 from datetime import datetime
 
+# Pattern for detecting placeholders for mismatch check only
 PLACEHOLDER_PATTERN = re.compile(
     r'\?"\{[^{}]+\}\?"|'
     r'\{\d+\}|'
@@ -52,8 +53,7 @@ def load_properties_from_path(file_path):
 def load_json_from_path(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            raw_data = f.read()
-            return json.loads(raw_data), None
+            return json.load(f), None
     except json.JSONDecodeError as e:
         explanation = str(e)
         line_info = f"line {e.lineno}, column {e.colno}"
@@ -76,7 +76,7 @@ def load_json_from_path(file_path):
                 raw_text = f.read()
                 matches = re.findall(r'"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"', raw_text)
                 for k, v in matches:
-                    recovered[k] = fix_encoding(v.encode('utf-8').decode('unicode_escape'))
+                    recovered[k] = fix_encoding(v)  # Raw content preserved
             return recovered, f"{bad_key} - JSON error at {line_info}: {explanation}"
         except Exception as inner:
             return None, f"Unrecoverable JSON error at {line_info}: {explanation} / {inner}"
@@ -114,8 +114,8 @@ def compare_files(source_data, translated_data, lang, file_name):
         elif isinstance(src_val, str) != isinstance(tgt_val, str):
             issues.append(("Quote Structure Mismatch", "Source and target value types do not match."))
         else:
-            src_str = str(src_val).strip()
-            tgt_str = str(tgt_val).strip()
+            src_str = str(src_val)
+            tgt_str = str(tgt_val)
 
             if src_str == tgt_str:
                 issues.append(("Untranslated Key", "Source and target values are identical."))
