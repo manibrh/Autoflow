@@ -22,6 +22,11 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .truncate.wrap {
+      white-space: normal;
+      word-break: break-word;
+      max-width: 400px;
+    }
     thead th {
       position: sticky;
       top: 0;
@@ -35,14 +40,21 @@
   <h3 class="mb-4">🧾 Final Comparison Report</h3>
 
   {% if rows and headers %}
-    <div class="mb-3">
-      <label for="filterType" class="form-label">🔍 Filter by Issue Type</label>
-      <select id="filterType" class="form-select w-auto d-inline-block">
-        <option value="">All</option>
-        {% for row in rows | unique(attribute=2) %}
-          <option value="{{ row[2] }}">{{ row[2] }}</option>
-        {% endfor %}
-      </select>
+    <div class="mb-3 d-flex flex-wrap gap-3 align-items-center">
+      <div>
+        <label for="filterType" class="form-label mb-0">🔍 Filter by Issue Type</label>
+        <select id="filterType" class="form-select w-auto d-inline-block">
+          <option value="">All</option>
+          {% for row in rows | unique(attribute=2) %}
+            <option value="{{ row[2] }}">{{ row[2] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="toggleWrap">
+        <label class="form-check-label" for="toggleWrap">🧾 Wrap Source/Target Text</label>
+      </div>
     </div>
 
     <div class="table-responsive mb-4 border rounded">
@@ -51,7 +63,7 @@
           <tr>
             <th>#</th>
             {% for h in headers %}
-              <th>
+              <th title="{% if h == 'Key' %}Unique string identifier{% elif h == 'Source' %}Original source string{% elif h == 'Target' %}Translated string{% elif h == 'Details' %}Why this row was flagged{% else %}{{ h }}{% endif %}">
                 {{ h }}
                 <input type="text" class="form-control form-control-sm mt-1 column-filter" data-col="{{ loop.index0 }}" placeholder="🔍">
               </th>
@@ -60,7 +72,9 @@
         </thead>
         <tbody>
           {% for row in rows %}
-            <tr data-issue="{{ row[2] }}">
+            <tr data-issue="{{ row[2] }}"
+              class="{% if 'Target Error' in row[2] or 'Source Error' in row[2] %}table-danger
+                      {% elif 'Placeholder Mismatch' in row[2] %}table-warning{% endif %}">
               <td>{{ loop.index }}</td>
               {% for col in row %}
                 <td class="truncate" title="{{ col }}">{{ col or '' }}</td>
@@ -84,15 +98,13 @@
 </div>
 
 <script>
-  const downloadBtn = document.getElementById('downloadBtn');
-  if (downloadBtn) {
-    downloadBtn.addEventListener('click', () => {
-      const spinner = document.getElementById('spinner');
-      if (spinner) spinner.style.display = 'inline-block';
-    });
-  }
+  // Spinner on download
+  document.getElementById('downloadBtn')?.addEventListener('click', () => {
+    const spinner = document.getElementById('spinner');
+    if (spinner) spinner.style.display = 'inline-block';
+  });
 
-  // Filter by issue type dropdown
+  // Filter by issue type
   document.getElementById('filterType')?.addEventListener('change', function () {
     const selected = this.value;
     const rows = document.querySelectorAll('#resultsTable tbody tr');
@@ -117,6 +129,13 @@
         });
         row.style.display = show ? '' : 'none';
       });
+    });
+  });
+
+  // Wrap toggle for Source/Target
+  document.getElementById('toggleWrap')?.addEventListener('change', function () {
+    document.querySelectorAll('#resultsTable td').forEach(td => {
+      td.classList.toggle('wrap', this.checked);
     });
   });
 </script>
