@@ -4,17 +4,16 @@ import xml.etree.ElementTree as ET
 
 def read_json_raw(path):
     """
-    Reads a JSON file line-by-line, extracting key-value pairs without decoding escape sequences.
-    Preserves raw strings like \"{queryString}\" exactly as in source.
+    Reads JSON file line-by-line, preserving raw escape sequences like \\\".
     """
     data = {}
     with open(path, 'r', encoding='utf-8') as f:
         for line in f:
-            # Matches "key": "value", ensuring closing quote isn't escaped
+            # Match "key": "value" without decoding escapes
             match = re.match(r'\s*"([^"]+)"\s*:\s*"(.*?)(?<!\\)"\s*,?\s*$', line)
             if match:
                 key, val = match.groups()
-                data[key] = val
+                data[key] = val  # Preserve exactly
     return data
 
 def read_properties(path):
@@ -38,11 +37,9 @@ def write_xliff(data_keys, input_file, output_file, src_lang='en', tgt_lang='xx'
 
     for i, key in enumerate(data_keys, start=1):
         tu = ET.SubElement(body, 'trans-unit', {'id': str(i), 'resname': key})
-        # Preserve raw escape characters by doubling backslashes
-        source_raw = src_data.get(key, '').replace('\\', '\\\\')
-        target_raw = tgt_data.get(key, '').replace('\\', '\\\\')
-        ET.SubElement(tu, 'source').text = source_raw
-        ET.SubElement(tu, 'target').text = target_raw
+        # Do NOT escape backslashes; write exactly as-is
+        ET.SubElement(tu, 'source').text = src_data.get(key, '')
+        ET.SubElement(tu, 'target').text = tgt_data.get(key, '')
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ET.ElementTree(xliff).write(output_file, encoding='utf-8', xml_declaration=True)
