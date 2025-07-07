@@ -33,18 +33,10 @@ def write_xliff(data, input_file, output_file, src_lang='en', tgt_lang='fr', ver
             'original': os.path.basename(input_file)
         })
         body = ET.SubElement(file_tag, 'body')
-
         for i, (key, value) in enumerate(data.items(), start=1):
             tu = ET.SubElement(body, 'trans-unit', {'id': str(i), 'resname': key})
-
-            # Raw-preserve <source>
-            source = ET.SubElement(tu, 'source')
-            source.text = None
-            tu.remove(source)
-            tu.append(ET.fromstring(f"<source>{value}</source>"))
-
+            ET.SubElement(tu, 'source').text = value
             ET.SubElement(tu, 'target').text = ''
-
         tree = ET.ElementTree(xliff)
 
     elif version == '2.0':
@@ -58,16 +50,11 @@ def write_xliff(data, input_file, output_file, src_lang='en', tgt_lang='fr', ver
         file_tag = ET.SubElement(xliff, f'{{{ns}}}file', {
             'id': os.path.basename(input_file)
         })
-
         for i, (key, value) in enumerate(data.items(), start=1):
             unit = ET.SubElement(file_tag, f'{{{ns}}}unit', {'id': str(i)})
             segment = ET.SubElement(unit, f'{{{ns}}}segment')
-
-            src = ET.SubElement(segment, f'{{{ns}}}source')
-            src.text = value
-
+            ET.SubElement(segment, f'{{{ns}}}source').text = value
             ET.SubElement(segment, f'{{{ns}}}target').text = ''
-
         tree = ET.ElementTree(xliff)
 
     else:
