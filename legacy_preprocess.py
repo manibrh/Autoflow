@@ -1,16 +1,13 @@
 import os
-import re
+import json
 import xml.etree.ElementTree as ET
 
 def read_json_raw(path):
-    data = {}
     with open(path, 'r', encoding='utf-8') as f:
-        for line in f:
-            match = re.match(r'\s*"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,?\s*$', line)
-            if match:
-                key, val = match.groups()
-                data[key] = val
-    return data
+        try:
+            return json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"JSON parsing error in {path}: {e}")
 
 def read_properties(path):
     data = {}
