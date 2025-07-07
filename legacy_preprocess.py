@@ -38,13 +38,7 @@ def write_xliff(data_keys, input_file, output_file, src_lang='en', tgt_lang='xx'
 
         for i, key in enumerate(data_keys, start=1):
             tu = ET.SubElement(body, 'trans-unit', {'id': str(i), 'resname': key})
-
-            # raw source text
-            source = ET.SubElement(tu, 'source')
-            source.text = None
-            tu.remove(source)
-            tu.append(ET.fromstring(f"<source>{src_data.get(key, '')}</source>"))
-
+            ET.SubElement(tu, 'source').text = src_data.get(key, '')
             ET.SubElement(tu, 'target').text = tgt_data.get(key, '')
 
     elif version == '2.0':
@@ -62,12 +56,8 @@ def write_xliff(data_keys, input_file, output_file, src_lang='en', tgt_lang='xx'
         for i, key in enumerate(data_keys, start=1):
             unit = ET.SubElement(file_tag, f'{{{ns}}}unit', {'id': str(i)})
             segment = ET.SubElement(unit, f'{{{ns}}}segment')
-
-            src = ET.SubElement(segment, f'{{{ns}}}source')
-            src.text = src_data.get(key, '')
-
-            tgt = ET.SubElement(segment, f'{{{ns}}}target')
-            tgt.text = tgt_data.get(key, '')
+            ET.SubElement(segment, f'{{{ns}}}source').text = src_data.get(key, '')
+            ET.SubElement(segment, f'{{{ns}}}target').text = tgt_data.get(key, '')
 
     else:
         raise ValueError("❌ Invalid XLIFF version: Use '1.2' or '2.0'.")
@@ -101,12 +91,8 @@ def run_legacy_preprocessing(input_dir, output_dir, version='1.2'):
             ext = os.path.splitext(base_name)[1].lower()
             try:
                 if ext == '.json':
-                    try:
-                        src_data = read_json_raw(source_path)
-                        tgt_data = read_json_raw(target_path)
-                    except Exception as e:
-                        errors.append(f"❌ JSON read error in {lang_code}/{base_name}: {str(e)}")
-                        continue
+                    src_data = read_json_raw(source_path)
+                    tgt_data = read_json_raw(target_path)
                 elif ext == '.properties':
                     src_data = read_properties(source_path)
                     tgt_data = read_properties(target_path)
