@@ -6,7 +6,7 @@ def read_json_raw(path):
     data = {}
     with open(path, 'r', encoding='utf-8') as f:
         for line in f:
-            match = re.match(r'\s*"([^"]+)"\s*:\s*"(.*?)(?<!\\)"\s*,?\s*$', line)
+            match = re.match(r'\s*"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,?\s*$', line)
             if match:
                 key, val = match.groups()
                 data[key] = val
@@ -22,12 +22,7 @@ def read_properties(path):
     return data
 
 def write_xliff(data_keys, input_file, output_file, src_lang='en', tgt_lang='xx', src_data=None, tgt_data=None):
-    ET.register_namespace('', "urn:oasis:names:tc:xliff:document:1.2")  # Ensure proper ns in output
-    xliff = ET.Element('xliff', {
-        'version': '1.2',
-        'xmlns': 'urn:oasis:names:tc:xliff:document:1.2'
-    })
-
+    xliff = ET.Element('xliff', {'version': '1.2'})
     file_tag = ET.SubElement(xliff, 'file', {
         'source-language': src_lang,
         'target-language': tgt_lang,
@@ -39,11 +34,10 @@ def write_xliff(data_keys, input_file, output_file, src_lang='en', tgt_lang='xx'
     for i, key in enumerate(data_keys, start=1):
         tu = ET.SubElement(body, 'trans-unit', {'id': str(i), 'resname': key})
         ET.SubElement(tu, 'source').text = src_data.get(key, '')
-        ET.SubElement(tu, 'target').text = tgt_data.get(key, '') or src_data.get(key, '')  # fallback for TEP
+        ET.SubElement(tu, 'target').text = tgt_data.get(key, '')
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ET.ElementTree(xliff).write(output_file, encoding='utf-8', xml_declaration=True)
-
 
 def run_legacy_preprocessing(input_dir, output_dir):
     errors = []
@@ -72,8 +66,12 @@ def run_legacy_preprocessing(input_dir, output_dir):
             ext = os.path.splitext(base_name)[1].lower()
             try:
                 if ext == '.json':
-                    src_data = read_json_raw(source_path)
-                    tgt_data = read_json_raw(target_path)
+                    try:
+                        src_data = read_json_raw(source_path)
+                        tgt_data = read_json_raw(target_path)
+                    except Exception as e:
+                        errors.append(f"❌ JSON read error in {lang_code}/{base_name}: {str(e)}")
+                        continue
                 elif ext == '.properties':
                     src_data = read_properties(source_path)
                     tgt_data = read_properties(target_path)
