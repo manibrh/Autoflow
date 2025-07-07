@@ -1,16 +1,28 @@
 import os
 import re
+import json
+import ast
 import xml.etree.ElementTree as ET
 
 def read_json_raw(path):
-    data = {}
     with open(path, 'r', encoding='utf-8') as f:
-        for line in f:
-            match = re.match(r'\s*"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,?\s*$', line)
-            if match:
-                key, val = match.groups()
-                data[key] = val
-    return data
+        text = f.read()
+
+    try:
+        return json.loads(text)
+    except:
+        pass  # Fallback to regex if JSON has formatting issues
+
+    # Regex to extract raw "key": "value" pairs
+    raw_pairs = re.findall(r'"([^"]+)"\s*:\s*(".*?")(,|\n|\r|\s)*', text)
+    result = {}
+    for key, val, _ in raw_pairs:
+        try:
+            # Use ast.literal_eval to preserve things like \"{queryString}\"
+            result[key] = ast.literal_eval(val)
+        except Exception:
+            result[key] = val
+    return result
 
 def read_properties(path):
     data = {}
