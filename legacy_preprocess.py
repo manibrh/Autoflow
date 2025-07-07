@@ -3,11 +3,11 @@ import json
 import xml.etree.ElementTree as ET
 
 def read_json_raw(path):
-    with open(path, 'r', encoding='utf-8') as f:
-        try:
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"JSON parsing error in {path}: {e}")
+    except json.JSONDecodeError as e:
+        raise Exception(f"JSON parsing error in {path}: {e}")
 
 def read_properties(path):
     data = {}
@@ -91,7 +91,7 @@ def run_legacy_preprocessing(input_dir, output_dir, version='1.2'):
                     try:
                         src_data = read_json_raw(source_path)
                         tgt_data = read_json_raw(target_path)
-                    except ValueError as ve:
+                    except Exception as ve:
                         errors.append(f"❌ JSON read error in {lang_code}/{base_name}: {str(ve)}")
                         continue
                 elif ext == '.properties':
