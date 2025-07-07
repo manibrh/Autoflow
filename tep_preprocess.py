@@ -2,6 +2,13 @@ import os
 import re
 import xml.etree.ElementTree as ET
 
+def escape_xml(text):
+    return (text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace('"', "&quot;")
+                .replace("'", "&apos;"))
+
 def read_json_raw(file_path):
     raw_lines = {}
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -33,7 +40,8 @@ def write_xliff(data, input_file, output_file, src_lang='en', tgt_lang='fr'):
 
     for i, (key, value) in enumerate(data.items(), start=1):
         tu = ET.SubElement(body, 'trans-unit', {'id': str(i), 'resname': key})
-        ET.SubElement(tu, 'source').text = value
+        ET.SubElement(tu, 'source').text = escape_xml(value)
+        ET.SubElement(tu, 'target').text = ''  # Empty target for translation
 
     tree = ET.ElementTree(xliff)
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
