@@ -4,71 +4,73 @@ import zipfile
 import xml.etree.ElementTree as ET
 import langcodes
 
-XLIFF_NS = {
-    '1.2': {'ns': 'urn:oasis:names:tc:xliff:document:1.2'},
-    '2.0': {'ns': 'urn:oasis:names:tc:xliff:document:2.0'}
-}
-
 def read_xliff(file_path):
     tree = ET.parse(file_path)
     root = tree.getroot()
 
-    if root.tag.endswith('xliff') and 'version' in root.attrib:
-        version = root.attrib['version']
-    else:
-        raise ValueError("Unknown XLIFF format")
+    version = root.attrib.get('version')
+    if not version:
+        raise ValueError("❌ Missing XLIFF version in root element")
+
+    translations = {}
 
     if version == '1.2':
-        ns = XLIFF_NS['1.2']['ns']
+        ns = 'urn:oasis:names:tc:xliff:document:1.2'
         file_node = root.find(f".//{{{ns}}}file")
+        if file_node is None:
+            raise ValueError("❌ XLIFF 1.2: <file> element not found")
+
         original_name = file_node.attrib.get('original')
         target_lang = file_node.attrib.get('target-language', 'xx')
-        ext = os.path.splitext(original_name)[1].lower()
-        translations = {}
 
         for tu in root.findall(f".//{{{ns}}}trans-unit"):
             key = tu.attrib.get('resname')
+            if not key:
+                continue
             tgt = tu.find(f"{{{ns}}}target")
             src = tu.find(f"{{{ns}}}source")
-            value = (tgt.text if tgt is not None and tgt.text else
-                     src.text if src is not None else "")
-            translations[key] = value
+            val = ''.join(tgt.itertext()) if tgt is not None else ''.join(src.itertext()) if src is not None else ''
+            translations[key] = val
 
     elif version == '2.0':
-        ns = XLIFF_NS['2.0']['ns']
-        target_lang = root.attrib.get('trgLang', 'xx')
+        ns = 'urn:oasis:names:tc:xliff:document:2.0'
         file_node = root.find(f".//{{{ns}}}file")
+        if file_node is None:
+            raise ValueError("❌ XLIFF 2.0: <file> element not found")
+
         original_name = file_node.attrib.get('id')
-        ext = os.path.splitext(original_name)[1].lower()
-        translations = {}
+        target_lang = root.attrib.get('trgLang', 'xx')
 
         for unit in root.findall(f".//{{{ns}}}unit"):
+            key = unit.attrib.get('id')
+            if not key:
+                continue
             seg = unit.find(f".//{{{ns}}}segment")
-            src = seg.find(f"{{{ns}}}source")
+            if seg is None:
+                continue
             tgt = seg.find(f"{{{ns}}}target")
-            key = unit.attrib.get("id")
-            value = (tgt.text if tgt is not None and tgt.text else
-                     src.text if src is not None else "")
-            translations[key] = value
+            src = seg.find(f"{{{ns}}}source")
+            val = ''.join(tgt.itertext()) if tgt is not None else ''.join(src.itertext()) if src is not None else ''
+            translations[key] = val
 
     else:
-        raise ValueError("Unsupported XLIFF version")
+        raise ValueError(f"❌ Unsupported XLIFF version: {version}")
 
     return translations, original_name, target_lang
 
 def write_output(translations, original_name, lang_code, output_dir):
     lang_name = langcodes.get(lang_code).language_name().title()
-    base_name = os.path.splitext(original_name)[0]
-    ext = os.path.splitext(original_name)[1].lower()
-
     lang_folder = os.path.join(output_dir, lang_code)
     os.makedirs(lang_folder, exist_ok=True)
 
-    output_path = os.path.join(lang_folder, f"{base_name}-{lang_name}{ext}")
+    base_name = os.path.splitext(original_name)[0]
+    ext = os.path.splitext(original_name)[1].lower()
+    output_file = f"{base_name}-{lang_name}{ext}"
+    output_path = os.path.join(lang_folder, output_file)
 
     if ext == ".json":
         with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(translations, f, ensure_ascii=False, indent=4)
+            json.dump(translations, f, indent=4, ensure_ascii=False)
     elif ext == ".properties":
         with open(output_path, 'w', encoding='utf-8') as f:
             for k, v in translations.items():
@@ -78,19 +80,20 @@ def write_output(translations, original_name, lang_code, output_dir):
 
 def run_tep_postprocessing(input_dir, output_dir):
     renamed_files = []
-    for fname in os.listdir(input_dir):
-        if fname.endswith('.xliff'):
-            fpath = os.path.join(input_dir, fname)
-            translations, original_name, lang_code = read_xliff(fpath)
-            rel = write_output(translations, original_name, lang_code, output_dir)
-            renamed_files.append(rel)
+    for filename in os.listdir(input_dir):
+        if filename.endswith('.xliff'):
+            xliff_path = os.path.join(input_dir, filename)
+            translations, original_name, target_lang = read_xliff(xliff_path)
+            rel_path = write_output(translations, original_name, target_lang, output_dir)
+            renamed_files.append(rel_path)
 
     zip_path = os.path.join(output_dir, "batch.zip")
-    with zipfile.ZipFile(zip_path, 'w') as z:
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, _, files in os.walk(output_dir):
-            for f in files:
-                if f != "batch.zip":
-                    full = os.path.join(root, f)
-                    z.write(full, os.path.relpath(full, output_dir))
+            for file in files:
+                if file != "batch.zip":
+                    full_path = os.path.join(root, file)
+                    arcname = os.path.relpath(full_path, output_dir)
+                    zipf.write(full_path, arcname)
 
     return renamed_files
