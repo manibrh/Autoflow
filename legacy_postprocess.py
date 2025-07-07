@@ -4,6 +4,8 @@ import zipfile
 import xml.etree.ElementTree as ET
 import langcodes
 
+XLIFF_NS = {'ns': 'urn:oasis:names:tc:xliff:document:1.2'}
+
 def read_json(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
@@ -29,65 +31,48 @@ def write_properties(data, file_path):
 def read_xliff(file_path):
     tree = ET.parse(file_path)
     root = tree.getroot()
-    version = root.attrib.get('version')
-
+    file_node = root.find(".//ns:file", namespaces=XLIFF_NS)
+    if file_node is None:
+        raise Exception(f"❌ XLIFF 1.2: <file> element not found in {file_path}")
+    
+    original_name = file_node.attrib.get('original')
+    target_lang = file_node.attrib.get('target-language', 'xx')
+    ext = os.path.splitext(original_name)[1].lower()
     translations = {}
 
-    if version == '1.2':
-        ns = 'urn:oasis:names:tc:xliff:document:1.2'
-        nsmap = {'ns': ns}
-        has_namespace = root.tag.startswith("{")
-
-        def q(tag): return f"{{{ns}}}{tag}" if has_namespace else tag
-
-        file_node = root.find(q("file"))
-        if file_node is None:
-            raise ValueError("❌ XLIFF 1.2: <file> element not found")
-
-        original_name = file_node.attrib.get('original')
-        target_lang = file_node.attrib.get('target-language', 'xx')
-
-        for tu in root.findall(f".//{q('trans-unit')}"):
-            key = tu.attrib.get('resname')
-            if not key:
-                continue
-            tgt = tu.find(q("target"))
-            src = tu.find(q("source"))
-            val = ''.join(tgt.itertext()) if tgt is not None else ''.join(src.itertext()) if src is not None else ''
-            translations[key] = val
-
-    elif version == '2.0':
-        ns = 'urn:oasis:names:tc:xliff:document:2.0'
-        file_node = root.find(f".//{{{ns}}}file")
-        if file_node is None:
-            raise ValueError("❌ XLIFF 2.0: <file> element not found")
-
-        original_name = file_node.attrib.get('id')
-        target_lang = root.attrib.get('trgLang', 'xx')
-
-        for unit in root.findall(f".//{{{ns}}}unit"):
-            key = unit.attrib.get('id')
-            if not key:
-                continue
-            seg = unit.find(f".//{{{ns}}}segment")
-            if seg is None:
-                continue
-            tgt = seg.find(f"{{{ns}}}target")
-            src = seg.find(f"{{{ns}}}source")
-            val = ''.join(tgt.itertext()) if tgt is not None else ''.join(src.itertext()) if src is not None else ''
-            translations[key] = val
-
-    else:
-        raise ValueError(f"❌ Unsupported XLIFF version: {version}")
+    for tu in root.findall(".//ns:trans-unit", namespaces=XLIFF_NS):
+        key = tu.attrib.get('resname')
+        if not key:
+            continue
+        target_elem = tu.find("ns:target", namespaces=XLIFF_NS)
+        source_elem = tu.find("ns:source", namespaces=XLIFF_NS)
+        value = (
+            target_elem.text if target_elem is not None and target_elem.text else
+            source_elem.text if source_elem is not None else ""
+        )
+        translations[key] = value
 
     return translations, original_name, target_lang
 
 def run_legacy_postprocessing(input_dir, output_dir):
     renamed_files = []
+    source_lookup = {}
+
+    # Build lookup from source_*.json/.properties files
+    for f in os.listdir(input_dir):
+        if f.startswith("source_"):
+            original_name = f.replace("source_", "")
+            path = os.path.join(input_dir, f)
+            source_lookup[original_name] = path
+
     for filename in os.listdir(input_dir):
         if filename.endswith('.xliff'):
             xliff_path = os.path.join(input_dir, filename)
-            translations, original_name, lang_code = read_xliff(xliff_path)
+            try:
+                translations, original_name, lang_code = read_xliff(xliff_path)
+            except Exception as e:
+                print(str(e))
+                continue
 
             ext = os.path.splitext(original_name)[1].lower()
             base_name = os.path.splitext(os.path.basename(original_name))[0]
@@ -98,22 +83,28 @@ def run_legacy_postprocessing(input_dir, output_dir):
             renamed_file = f"{base_name}-{lang_name}{ext}"
             output_path = os.path.join(lang_folder, renamed_file)
 
-            if ext == '.json':
-                original = read_json(output_path) if os.path.exists(output_path) else {}
-                for k in translations:
-                    if k in original:
-                        original[k] = translations[k]
-                write_json(original, output_path)
+            source_path = source_lookup.get(original_name)
+            original = {}
 
-            elif ext == '.properties':
-                original = read_properties(output_path) if os.path.exists(output_path) else {}
-                for k in translations:
-                    if k in original:
-                        original[k] = translations[k]
+            if source_path and os.path.exists(source_path):
+                if ext == ".json":
+                    original = read_json(source_path)
+                elif ext == ".properties":
+                    original = read_properties(source_path)
+
+            # Merge translations into original or create new
+            for k in translations:
+                original[k] = translations[k]
+
+            # Write output
+            if ext == ".json":
+                write_json(original, output_path)
+            elif ext == ".properties":
                 write_properties(original, output_path)
 
             renamed_files.append(os.path.relpath(output_path, output_dir))
 
+    # Create ZIP
     zip_path = os.path.join(output_dir, "batch.zip")
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, _, files in os.walk(output_dir):
