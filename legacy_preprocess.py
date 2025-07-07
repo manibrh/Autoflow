@@ -22,10 +22,12 @@ def read_properties(path):
     return data
 
 def write_xliff(data_keys, input_file, output_file, src_lang='en', tgt_lang='xx', src_data=None, tgt_data=None):
+    ET.register_namespace('', "urn:oasis:names:tc:xliff:document:1.2")  # Ensure proper ns in output
     xliff = ET.Element('xliff', {
         'version': '1.2',
         'xmlns': 'urn:oasis:names:tc:xliff:document:1.2'
     })
+
     file_tag = ET.SubElement(xliff, 'file', {
         'source-language': src_lang,
         'target-language': tgt_lang,
@@ -37,10 +39,11 @@ def write_xliff(data_keys, input_file, output_file, src_lang='en', tgt_lang='xx'
     for i, key in enumerate(data_keys, start=1):
         tu = ET.SubElement(body, 'trans-unit', {'id': str(i), 'resname': key})
         ET.SubElement(tu, 'source').text = src_data.get(key, '')
-        ET.SubElement(tu, 'target').text = tgt_data.get(key, '')
+        ET.SubElement(tu, 'target').text = tgt_data.get(key, '') or src_data.get(key, '')  # fallback for TEP
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ET.ElementTree(xliff).write(output_file, encoding='utf-8', xml_declaration=True)
+
 
 def run_legacy_preprocessing(input_dir, output_dir):
     errors = []
