@@ -22,7 +22,10 @@ def read_properties(file_path):
     return data
 
 def write_xliff(data, input_file, output_file, src_lang='en', tgt_lang='fr'):
-    xliff = ET.Element('xliff', {'version': '1.2'})
+    xliff = ET.Element('xliff', {
+        'version': '1.2',
+        'xmlns': 'urn:oasis:names:tc:xliff:document:1.2'
+    })
     file_tag = ET.SubElement(xliff, 'file', {
         'source-language': src_lang,
         'target-language': tgt_lang,
@@ -35,9 +38,8 @@ def write_xliff(data, input_file, output_file, src_lang='en', tgt_lang='fr'):
         tu = ET.SubElement(body, 'trans-unit', {'id': str(i), 'resname': key})
         ET.SubElement(tu, 'source').text = value
 
-    tree = ET.ElementTree(xliff)
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    tree.write(output_file, encoding='utf-8', xml_declaration=True)
+    ET.ElementTree(xliff).write(output_file, encoding='utf-8', xml_declaration=True)
 
 def run_tep_preprocessing(input_dir, output_dir):
     for filename in os.listdir(input_dir):
