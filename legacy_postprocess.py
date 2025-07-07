@@ -1,30 +1,48 @@
 import os
-import json
 import zipfile
 import xml.etree.ElementTree as ET
 import langcodes
+import re
 
 XLIFF_NS = {'ns': 'urn:oasis:names:tc:xliff:document:1.2'}
 
-def read_json(file_path):
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def write_json(data, file_path):
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
-
-def read_properties(file_path):
+def read_json_raw(path):
+    """Reads JSON file with tolerant parsing (preserves malformed values)."""
     data = {}
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         for line in f:
-            if line.strip() and not line.startswith('#') and '=' in line:
-                key, val = line.split('=', 1)
-                data[key.strip()] = val.strip()
+            match = re.match(r'\s*"([^"]+)"\s*:\s*"(.*)"\s*,?\s*$', line)
+            if match:
+                key, val = match.groups()
+                data[key] = val
+            else:
+                parts = line.strip().split(":", 1)
+                if len(parts) == 2:
+                    key = parts[0].strip().strip('"')
+                    val = parts[1].strip().rstrip(',').strip()
+                    data[key] = val
     return data
 
-def write_properties(data, file_path):
-    with open(file_path, 'w', encoding='utf-8') as f:
+def write_json_raw(data, path):
+    """Writes JSON with raw values preserved (no escaping)."""
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write("{\n")
+        for i, (k, v) in enumerate(data.items()):
+            comma = ',' if i < len(data) - 1 else ''
+            f.write(f'  "{k}": "{v}"{comma}\n')
+        f.write("}\n")
+
+def read_properties(path):
+    data = {}
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            if line.strip() and not line.startswith('#') and '=' in line:
+                k, v = line.split('=', 1)
+                data[k.strip()] = v.strip()
+    return data
+
+def write_properties(data, path):
+    with open(path, 'w', encoding='utf-8') as f:
         for k, v in data.items():
             f.write(f"{k}={v}\n")
 
@@ -58,7 +76,7 @@ def run_legacy_postprocessing(input_dir, output_dir):
     renamed_files = []
     source_lookup = {}
 
-    # Build lookup from source_*.json/.properties files
+    # Map of original filenames to source paths
     for f in os.listdir(input_dir):
         if f.startswith("source_"):
             original_name = f.replace("source_", "")
@@ -83,28 +101,29 @@ def run_legacy_postprocessing(input_dir, output_dir):
             renamed_file = f"{base_name}-{lang_name}{ext}"
             output_path = os.path.join(lang_folder, renamed_file)
 
+            # Read source file if available
             source_path = source_lookup.get(original_name)
             original = {}
 
             if source_path and os.path.exists(source_path):
                 if ext == ".json":
-                    original = read_json(source_path)
+                    original = read_json_raw(source_path)
                 elif ext == ".properties":
                     original = read_properties(source_path)
 
-            # Merge translations into original or create new
+            # Merge translations into source (or create new)
             for k in translations:
                 original[k] = translations[k]
 
-            # Write output
+            # Write final file
             if ext == ".json":
-                write_json(original, output_path)
+                write_json_raw(original, output_path)
             elif ext == ".properties":
                 write_properties(original, output_path)
 
             renamed_files.append(os.path.relpath(output_path, output_dir))
 
-    # Create ZIP
+    # Create batch.zip
     zip_path = os.path.join(output_dir, "batch.zip")
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, _, files in os.walk(output_dir):
