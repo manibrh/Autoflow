@@ -1,13 +1,25 @@
 import os
-import json
 import xml.etree.ElementTree as ET
+import re
 
 def read_json_raw(path):
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        raise Exception(f"JSON parsing error in {path}: {e}")
+    """Reads JSON file with tolerant parsing (keeps malformed values as raw)."""
+    data = {}
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            # Match valid key-value pairs like: "key": "value"
+            match = re.match(r'\s*"([^"]+)"\s*:\s*"(.*)"\s*,?\s*$', line)
+            if match:
+                key, val = match.groups()
+                data[key] = val
+            else:
+                # Try fallback for malformed lines like: "key": {<tag>}
+                parts = line.strip().split(":", 1)
+                if len(parts) == 2:
+                    key = parts[0].strip().strip('"')
+                    val = parts[1].strip().rstrip(',').strip()
+                    data[key] = val
+    return data
 
 def read_properties(path):
     data = {}
