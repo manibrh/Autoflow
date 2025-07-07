@@ -3,17 +3,13 @@ import re
 import xml.etree.ElementTree as ET
 
 def read_json_raw(path):
-    """
-    Reads JSON file line-by-line, preserving raw escape sequences like \\\".
-    """
     data = {}
     with open(path, 'r', encoding='utf-8') as f:
         for line in f:
-            # Match "key": "value" without decoding escapes
             match = re.match(r'\s*"([^"]+)"\s*:\s*"(.*?)(?<!\\)"\s*,?\s*$', line)
             if match:
                 key, val = match.groups()
-                data[key] = val  # Preserve exactly
+                data[key] = val
     return data
 
 def read_properties(path):
@@ -26,7 +22,10 @@ def read_properties(path):
     return data
 
 def write_xliff(data_keys, input_file, output_file, src_lang='en', tgt_lang='xx', src_data=None, tgt_data=None):
-    xliff = ET.Element('xliff', {'version': '1.2'})
+    xliff = ET.Element('xliff', {
+        'version': '1.2',
+        'xmlns': 'urn:oasis:names:tc:xliff:document:1.2'
+    })
     file_tag = ET.SubElement(xliff, 'file', {
         'source-language': src_lang,
         'target-language': tgt_lang,
@@ -37,7 +36,6 @@ def write_xliff(data_keys, input_file, output_file, src_lang='en', tgt_lang='xx'
 
     for i, key in enumerate(data_keys, start=1):
         tu = ET.SubElement(body, 'trans-unit', {'id': str(i), 'resname': key})
-        # Do NOT escape backslashes; write exactly as-is
         ET.SubElement(tu, 'source').text = src_data.get(key, '')
         ET.SubElement(tu, 'target').text = tgt_data.get(key, '')
 
@@ -71,12 +69,8 @@ def run_legacy_preprocessing(input_dir, output_dir):
             ext = os.path.splitext(base_name)[1].lower()
             try:
                 if ext == '.json':
-                    try:
-                        src_data = read_json_raw(source_path)
-                        tgt_data = read_json_raw(target_path)
-                    except Exception as e:
-                        errors.append(f"❌ JSON read error in {lang_code}/{base_name}: {str(e)}")
-                        continue
+                    src_data = read_json_raw(source_path)
+                    tgt_data = read_json_raw(target_path)
                 elif ext == '.properties':
                     src_data = read_properties(source_path)
                     tgt_data = read_properties(target_path)
