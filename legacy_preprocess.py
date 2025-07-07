@@ -1,28 +1,21 @@
 import os
 import re
-import json
-import ast
 import xml.etree.ElementTree as ET
 
 def read_json_raw(path):
+    """
+    Reads a JSON file line-by-line, extracting key-value pairs without decoding escape sequences.
+    Preserves raw strings like \"{queryString}\" exactly as in source.
+    """
+    data = {}
     with open(path, 'r', encoding='utf-8') as f:
-        text = f.read()
-
-    try:
-        return json.loads(text)
-    except:
-        pass  # Fallback to regex if JSON has formatting issues
-
-    # Regex to extract raw "key": "value" pairs
-    raw_pairs = re.findall(r'"([^"]+)"\s*:\s*(".*?")(,|\n|\r|\s)*', text)
-    result = {}
-    for key, val, _ in raw_pairs:
-        try:
-            # Use ast.literal_eval to preserve things like \"{queryString}\"
-            result[key] = ast.literal_eval(val)
-        except Exception:
-            result[key] = val
-    return result
+        for line in f:
+            # Matches "key": "value", ensuring closing quote isn't escaped
+            match = re.match(r'\s*"([^"]+)"\s*:\s*"(.*?)(?<!\\)"\s*,?\s*$', line)
+            if match:
+                key, val = match.groups()
+                data[key] = val
+    return data
 
 def read_properties(path):
     data = {}
@@ -45,8 +38,11 @@ def write_xliff(data_keys, input_file, output_file, src_lang='en', tgt_lang='xx'
 
     for i, key in enumerate(data_keys, start=1):
         tu = ET.SubElement(body, 'trans-unit', {'id': str(i), 'resname': key})
-        ET.SubElement(tu, 'source').text = src_data.get(key, '')
-        ET.SubElement(tu, 'target').text = tgt_data.get(key, '')
+        # Preserve raw escape characters by doubling backslashes
+        source_raw = src_data.get(key, '').replace('\\', '\\\\')
+        target_raw = tgt_data.get(key, '').replace('\\', '\\\\')
+        ET.SubElement(tu, 'source').text = source_raw
+        ET.SubElement(tu, 'target').text = target_raw
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ET.ElementTree(xliff).write(output_file, encoding='utf-8', xml_declaration=True)
