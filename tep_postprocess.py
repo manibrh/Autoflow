@@ -7,28 +7,30 @@ import langcodes
 def read_xliff(file_path):
     tree = ET.parse(file_path)
     root = tree.getroot()
-
     version = root.attrib.get('version')
-    if not version:
-        raise ValueError("❌ Missing XLIFF version in root element")
 
     translations = {}
 
     if version == '1.2':
         ns = 'urn:oasis:names:tc:xliff:document:1.2'
-        file_node = root.find(f".//{{{ns}}}file")
+        nsmap = {'ns': ns}
+        has_namespace = root.tag.startswith("{")
+
+        def q(tag): return f"{{{ns}}}{tag}" if has_namespace else tag
+
+        file_node = root.find(q("file"))
         if file_node is None:
             raise ValueError("❌ XLIFF 1.2: <file> element not found")
 
         original_name = file_node.attrib.get('original')
         target_lang = file_node.attrib.get('target-language', 'xx')
 
-        for tu in root.findall(f".//{{{ns}}}trans-unit"):
+        for tu in root.findall(f".//{q('trans-unit')}"):
             key = tu.attrib.get('resname')
             if not key:
                 continue
-            tgt = tu.find(f"{{{ns}}}target")
-            src = tu.find(f"{{{ns}}}source")
+            tgt = tu.find(q("target"))
+            src = tu.find(q("source"))
             val = ''.join(tgt.itertext()) if tgt is not None else ''.join(src.itertext()) if src is not None else ''
             translations[key] = val
 
