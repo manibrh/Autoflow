@@ -26,9 +26,17 @@
 
         <div class="mb-3">
           <label class="form-label">Select Process</label>
-          <select name="processType" class="form-select">
+          <select name="processType" class="form-select" onchange="toggleTepVersion(this.value)">
             <option value="preprocess">Preprocess</option>
             <option value="postprocess">Postprocess</option>
+          </select>
+        </div>
+
+        <div class="mb-3" id="tepVersionSelect">
+          <label class="form-label">XLIFF Version</label>
+          <select class="form-select" name="xliff_version">
+            <option value="1.2" selected>XLIFF 1.2</option>
+            <option value="2.0">XLIFF 2.0</option>
           </select>
         </div>
 
@@ -55,6 +63,13 @@
         </div>
 
         <div id="legacyPreInputs">
+          <div class="mb-3">
+            <label class="form-label">XLIFF Version</label>
+            <select class="form-select" name="xliff_version">
+              <option value="1.2" selected>XLIFF 1.2</option>
+              <option value="2.0">XLIFF 2.0</option>
+            </select>
+          </div>
           <div class="row mb-3">
             <div class="col-md-6">
               <label class="form-label">Source Files</label>
@@ -108,6 +123,11 @@
       pre.style.display = 'none';
       post.style.display = 'block';
     }
+  }
+
+  function toggleTepVersion(value) {
+    const versionSelect = document.getElementById('tepVersionSelect');
+    versionSelect.style.display = value === 'preprocess' ? 'block' : 'none';
   }
 </script>
 </body>
