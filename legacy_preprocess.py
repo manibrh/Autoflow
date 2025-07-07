@@ -88,8 +88,12 @@ def run_legacy_preprocessing(input_dir, output_dir, version='1.2'):
             ext = os.path.splitext(base_name)[1].lower()
             try:
                 if ext == '.json':
-                    src_data = read_json_raw(source_path)
-                    tgt_data = read_json_raw(target_path)
+                    try:
+                        src_data = read_json_raw(source_path)
+                        tgt_data = read_json_raw(target_path)
+                    except ValueError as ve:
+                        errors.append(f"❌ JSON read error in {lang_code}/{base_name}: {str(ve)}")
+                        continue
                 elif ext == '.properties':
                     src_data = read_properties(source_path)
                     tgt_data = read_properties(target_path)
