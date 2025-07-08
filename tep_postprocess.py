@@ -3,12 +3,12 @@ import json
 import zipfile
 import xml.etree.ElementTree as ET
 import langcodes
+import re
 
 def read_xliff(file_path):
     tree = ET.parse(file_path)
     root = tree.getroot()
     version = root.attrib.get('version')
-
     translations = {}
 
     if version == '1.2':
@@ -61,16 +61,20 @@ def read_xliff(file_path):
     return translations, original_name, target_lang
 
 def write_output(translations, original_name, lang_code, output_dir):
+    # 🧹 Clean original filename
+    base_name = os.path.splitext(os.path.basename(original_name))[0]
+    ext = os.path.splitext(original_name)[1].lower()
+    base_name = re.sub(r'[-_](en|[a-z]{2}(?:-[A-Z]{2})?)$', '', base_name, flags=re.IGNORECASE)
+
+    # 🏷 Language formatting
     lang_name = langcodes.get(lang_code).language_name().title()
     lang_folder = os.path.join(output_dir, lang_code)
     os.makedirs(lang_folder, exist_ok=True)
 
-    base_name = os.path.splitext(original_name)[0]
-    ext = os.path.splitext(original_name)[1].lower()
-    output_file = f"{base_name}-{lang_name}{ext}"
-    output_path = os.path.join(lang_folder, output_file)
+    renamed_file = f"{base_name}-{lang_name}{ext}"
+    output_path = os.path.join(lang_folder, renamed_file)
 
-    # Unescape function to normalize backslashes and quotes
+    # 🧼 Fix escape issues (e.g., backslashes and quotes)
     def unescape_text(text):
         try:
             return text.encode('utf-8').decode('unicode_escape')
@@ -88,7 +92,6 @@ def write_output(translations, original_name, lang_code, output_dir):
         with open(output_path, 'w', encoding='utf-8') as f:
             for k, v in translations.items():
                 cleaned_val = unescape_text(v).replace('\n', '\\n')
-                # Escape = and : for properties format
                 cleaned_val = cleaned_val.replace('=', '\\=').replace(':', '\\:')
                 f.write(f"{k}={cleaned_val}\n")
 
