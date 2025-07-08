@@ -74,14 +74,6 @@ def read_xliff(file_path):
 
 def run_legacy_postprocessing(input_dir, output_dir):
     renamed_files = []
-    source_lookup = {}
-
-    # Map of original filenames to source paths
-    for f in os.listdir(input_dir):
-        if f.startswith("source_"):
-            original_name = f.replace("source_", "")
-            path = os.path.join(input_dir, f)
-            source_lookup[original_name] = path
 
     for filename in os.listdir(input_dir):
         if filename.endswith('.xliff'):
@@ -89,7 +81,7 @@ def run_legacy_postprocessing(input_dir, output_dir):
             try:
                 translations, original_name, lang_code = read_xliff(xliff_path)
             except Exception as e:
-                print(str(e))
+                print(f"❌ Error parsing {filename}: {e}")
                 continue
 
             ext = os.path.splitext(original_name)[1].lower()
@@ -101,36 +93,30 @@ def run_legacy_postprocessing(input_dir, output_dir):
             renamed_file = f"{base_name}-{lang_name}{ext}"
             output_path = os.path.join(lang_folder, renamed_file)
 
-            # Read source file if available
-            source_path = source_lookup.get(original_name)
-            original = {}
+            print(f"✅ Writing: {output_path} ({len(translations)} entries)")
 
-            if source_path and os.path.exists(source_path):
-                if ext == ".json":
-                    original = read_json_raw(source_path)
-                elif ext == ".properties":
-                    original = read_properties(source_path)
-
-            # Merge translations into source (or create new)
-            for k in translations:
-                original[k] = translations[k]
-
-            # Write final file
             if ext == ".json":
-                write_json_raw(original, output_path)
+                write_json_raw(translations, output_path)
             elif ext == ".properties":
-                write_properties(original, output_path)
+                write_properties(translations, output_path)
+            else:
+                print(f"⚠️ Unsupported extension: {ext}")
+                continue
 
             renamed_files.append(os.path.relpath(output_path, output_dir))
 
-    # Create batch.zip
-    zip_path = os.path.join(output_dir, "batch.zip")
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, _, files in os.walk(output_dir):
-            for file in files:
-                if file != "batch.zip":
-                    full_path = os.path.join(root, file)
-                    arcname = os.path.relpath(full_path, output_dir)
-                    zipf.write(full_path, arcname)
+    # Create batch.zip if any files were written
+    if renamed_files:
+        zip_path = os.path.join(output_dir, "batch.zip")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(output_dir):
+                for file in files:
+                    if file != "batch.zip":
+                        full_path = os.path.join(root, file)
+                        arcname = os.path.relpath(full_path, output_dir)
+                        zipf.write(full_path, arcname)
+        print(f"📦 batch.zip created with {len(renamed_files)} files.")
+    else:
+        print("⚠️ No output files generated.")
 
     return renamed_files
