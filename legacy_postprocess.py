@@ -49,21 +49,37 @@ def write_properties(data, path):
 def read_xliff(file_path):
     tree = ET.parse(file_path)
     root = tree.getroot()
-    file_node = root.find(".//ns:file", namespaces=XLIFF_NS)
+
+    # Detect namespace
+    if root.tag.startswith('{'):
+        ns_match = re.match(r'\{(.*)\}', root.tag)
+        ns_uri = ns_match.group(1) if ns_match else ''
+        ns = {'ns': ns_uri}
+        file_xpath = ".//ns:file"
+        trans_unit_xpath = ".//ns:trans-unit"
+        source_xpath = "ns:source"
+        target_xpath = "ns:target"
+    else:
+        ns = {}
+        file_xpath = ".//file"
+        trans_unit_xpath = ".//trans-unit"
+        source_xpath = "source"
+        target_xpath = "target"
+
+    file_node = root.find(file_xpath, namespaces=ns)
     if file_node is None:
-        raise Exception(f"❌ XLIFF 1.2: <file> element not found in {file_path}")
+        raise Exception(f"❌ XLIFF: <file> element not found in {file_path}")
     
     original_name = file_node.attrib.get('original')
     target_lang = file_node.attrib.get('target-language', 'xx')
-    ext = os.path.splitext(original_name)[1].lower()
     translations = {}
 
-    for tu in root.findall(".//ns:trans-unit", namespaces=XLIFF_NS):
+    for tu in root.findall(trans_unit_xpath, namespaces=ns):
         key = tu.attrib.get('resname')
         if not key:
             continue
-        target_elem = tu.find("ns:target", namespaces=XLIFF_NS)
-        source_elem = tu.find("ns:source", namespaces=XLIFF_NS)
+        target_elem = tu.find(target_xpath, namespaces=ns)
+        source_elem = tu.find(source_xpath, namespaces=ns)
         value = (
             target_elem.text if target_elem is not None and target_elem.text else
             source_elem.text if source_elem is not None else ""
@@ -71,6 +87,7 @@ def read_xliff(file_path):
         translations[key] = value
 
     return translations, original_name, target_lang
+
 
 def run_legacy_postprocessing(input_dir, output_dir):
     renamed_files = []
