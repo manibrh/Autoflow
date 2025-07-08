@@ -153,6 +153,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
     with zipfile.ZipFile(translated_zip_file, 'r') as zip_ref:
         zip_ref.extractall(translated_dir)
 
+    # Step 1: Load all source files into source_map
     source_map = {}
     for src in source_files:
         filename = src.filename
@@ -180,6 +181,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
 
         source_map[cleaned] = (filename, data)
 
+    # Step 2: Process target files from ZIP
     for lang in os.listdir(translated_dir):
         lang_path = os.path.join(translated_dir, lang)
         if not os.path.isdir(lang_path):
@@ -188,27 +190,28 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
         for file in os.listdir(lang_path):
             tgt_path = os.path.join(lang_path, file)
             ext = os.path.splitext(file)[1].lower()
-            cleaned_tgt = f"{clean_filename_for_match(file)}{ext}"
+            tgt_base = clean_filename_for_match(file)
 
-            if cleaned_tgt in source_map:
-                src_filename, source_data = source_map[cleaned_tgt]
-            else:
-                matched = False
-                for key in source_map:
-                    if cleaned_tgt in key or key in cleaned_tgt:
-                        src_filename, source_data = source_map[key]
-                        matched = True
-                        break
-                if not matched:
-                    all_report_rows.append({
-                        "File Name": file,
-                        "Language": lang,
-                        "Issue Type": "No matching source file",
-                        "Key": file,
-                        "Source": "", "Target": "", "Details": ""
-                    })
-                    continue
+            # Try to match with source_map using cleaned base logic
+            matched = False
+            for key in source_map:
+                src_base = clean_filename_for_match(key)
+                if tgt_base == src_base or tgt_base.startswith(src_base) or src_base.startswith(tgt_base):
+                    src_filename, source_data = source_map[key]
+                    matched = True
+                    break
 
+            if not matched:
+                all_report_rows.append({
+                    "File Name": file,
+                    "Language": lang,
+                    "Issue Type": "No matching source file",
+                    "Key": file,
+                    "Source": "", "Target": "", "Details": ""
+                })
+                continue
+
+            # Load translated content
             if ext == '.json':
                 tgt_data, err = load_json_from_path(tgt_path)
             elif ext == '.properties':
@@ -228,9 +231,11 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                 if not tgt_data:
                     continue
 
+            # Compare source and target
             issues = compare_files(source_data, tgt_data, lang, file)
             all_report_rows.extend(issues)
 
+    # Step 3: Generate Excel report
     token = str(uuid.uuid4())
     date_str = datetime.now().strftime("%d-%b-%Y")
     report_name = f"Comparison_Report_{date_str}.xlsx"
@@ -247,3 +252,4 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             worksheet.set_column(i, i, width, wrap_format)
 
     return output_path, token, report_name, all_report_rows
+
