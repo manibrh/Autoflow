@@ -1,13 +1,10 @@
 import os
+import re
 import zipfile
 import xml.etree.ElementTree as ET
 import langcodes
-import re
-
-XLIFF_NS = {'ns': 'urn:oasis:names:tc:xliff:document:1.2'}
 
 def read_json_raw(path):
-    """Reads JSON file with tolerant parsing (preserves malformed values)."""
     data = {}
     with open(path, 'r', encoding='utf-8') as f:
         for line in f:
@@ -24,7 +21,6 @@ def read_json_raw(path):
     return data
 
 def write_json_raw(data, path):
-    """Writes JSON with raw values preserved (no escaping)."""
     with open(path, 'w', encoding='utf-8') as f:
         f.write("{\n")
         for i, (k, v) in enumerate(data.items()):
@@ -50,7 +46,6 @@ def read_xliff(file_path):
     tree = ET.parse(file_path)
     root = tree.getroot()
 
-    # Detect namespace
     if root.tag.startswith('{'):
         ns_match = re.match(r'\{(.*)\}', root.tag)
         ns_uri = ns_match.group(1) if ns_match else ''
@@ -70,7 +65,7 @@ def read_xliff(file_path):
     if file_node is None:
         raise Exception(f"❌ XLIFF: <file> element not found in {file_path}")
     
-    original_name = file_node.attrib.get('original')
+    original_name = file_node.attrib.get('original', os.path.basename(file_path))
     target_lang = file_node.attrib.get('target-language', 'xx')
     translations = {}
 
@@ -88,7 +83,6 @@ def read_xliff(file_path):
 
     return translations, original_name, target_lang
 
-
 def run_legacy_postprocessing(input_dir, output_dir):
     renamed_files = []
 
@@ -104,10 +98,14 @@ def run_legacy_postprocessing(input_dir, output_dir):
             ext = os.path.splitext(original_name)[1].lower()
             base_name = os.path.splitext(os.path.basename(original_name))[0]
 
-            # 🧹 Remove language suffixes like -en, _en_US, -ta-IN, etc.
-            base_name = re.sub(r'[-_](en|[a-z]{2}(?:-[A-Z]{2})?)$', '', base_name, flags=re.IGNORECASE)
+            # 🧹 Remove language suffixes like -en, _en_US, -ta-IN
+            base_name = re.sub(r'[-_](en|[a-z]{2}(?:[-_][A-Z]{2})?)$', '', base_name, flags=re.IGNORECASE)
 
-            lang_name = langcodes.get(lang_code).language_name().title()
+            try:
+                lang_name = langcodes.get(lang_code).language_name().title()
+            except:
+                lang_name = lang_code  # fallback to raw code
+
             lang_folder = os.path.join(output_dir, lang_code)
             os.makedirs(lang_folder, exist_ok=True)
 
@@ -126,16 +124,11 @@ def run_legacy_postprocessing(input_dir, output_dir):
 
             renamed_files.append(os.path.relpath(output_path, output_dir))
 
-    # Create batch.zip if any files were written
     if renamed_files:
         zip_path = os.path.join(output_dir, "batch.zip")
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, _, files in os.walk(output_dir):
-                for file in files:
-                    if file != "batch.zip":
-                        full_path = os.path.join(root, file)
-                        arcname = os.path.relpath(full_path, output_dir)
-                        zipf.write(full_path, arcname)
+            for file in renamed_files:
+                zipf.write(os.path.join(output_dir, file), arcname=file)
         print(f"📦 batch.zip created with {len(renamed_files)} files.")
     else:
         print("⚠️ No output files generated.")
