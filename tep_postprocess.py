@@ -70,13 +70,27 @@ def write_output(translations, original_name, lang_code, output_dir):
     output_file = f"{base_name}-{lang_name}{ext}"
     output_path = os.path.join(lang_folder, output_file)
 
+    # Unescape function to normalize backslashes and quotes
+    def unescape_text(text):
+        try:
+            return text.encode('utf-8').decode('unicode_escape')
+        except:
+            return text
+
     if ext == ".json":
+        cleaned_translations = {
+            k: unescape_text(v) for k, v in translations.items()
+        }
         with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(translations, f, indent=4, ensure_ascii=False)
+            json.dump(cleaned_translations, f, indent=4, ensure_ascii=False)
+
     elif ext == ".properties":
         with open(output_path, 'w', encoding='utf-8') as f:
             for k, v in translations.items():
-                f.write(f"{k}={v}\n")
+                cleaned_val = unescape_text(v).replace('\n', '\\n')
+                # Escape = and : for properties format
+                cleaned_val = cleaned_val.replace('=', '\\=').replace(':', '\\:')
+                f.write(f"{k}={cleaned_val}\n")
 
     return os.path.relpath(output_path, output_dir)
 
