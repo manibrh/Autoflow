@@ -71,11 +71,42 @@
     </ul>
 
     <h2>🔍 Final Compare</h2>
-    <ul>
-      <li>Upload source files (.json/.properties)</li>
-      <li>Upload ZIP of translated files (folder-wise: <code>ta-IN/</code>, <code>hi-IN/</code>)</li>
-      <li>Output: Excel report + preview table</li>
-    </ul>
+<ul>
+  <li>Upload source files (<code>.json</code> / <code>.properties</code>)</li>
+  <li>Upload a ZIP of translated files (folder-wise: <code>ta-IN/</code>, <code>hi-IN/</code>)</li>
+  <li>Tool matches each file by name (ignoring language suffix like <code>-ta</code>, <code>_fr</code>)</li>
+  <li>Compares source and target values, checks placeholders, spacing, and key-level structure</li>
+  <li>Output: Excel report + issue preview table in web UI</li>
+</ul>
+
+<h5>🧪 Issues Detected:</h5>
+<div class="table-responsive">
+  <table class="table table-bordered table-sm">
+    <thead class="table-light">
+      <tr>
+        <th>Issue Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Missing Key</td><td>Key exists in source but is missing in target.</td></tr>
+      <tr><td>Extra Key</td><td>Key exists in target but not in source.</td></tr>
+      <tr><td>Quote Structure Mismatch</td><td>Source and target value types are different (e.g., string vs object).</td></tr>
+      <tr><td>Untranslated Key</td><td>Target value is identical to the source.</td></tr>
+      <tr><td>Placeholder Mismatch</td><td>Mismatch in placeholder usage (e.g., <code>{user}</code>, <code>{{name}}</code>, <code>%s</code>).</td></tr>
+      <tr><td>No Space Before Placeholder</td><td>Word and placeholder merged without spacing (e.g., <code>word{{val}}</code>).</td></tr>
+      <tr><td>No Space After Placeholder</td><td>Placeholder and word merged without spacing (e.g., <code>{{val}}word</code>).</td></tr>
+      <tr><td>Missing Space After Punctuation</td><td>Punctuation mark is not followed by space (e.g., <code>.Next</code>).</td></tr>
+      <tr><td>Missing Space After Closing Tag</td><td>Markup end (e.g., <code>}}</code>) is not followed by space.</td></tr>
+      <tr><td>Missing Space Between Number and Word</td><td>Digit and word joined without spacing (e.g., <code>5users</code>).</td></tr>
+      <tr><td>Source Error</td><td>Failed to parse source file (bad JSON or encoding).</td></tr>
+      <tr><td>Target Error</td><td>Failed to parse translated file (bad JSON or malformed properties).</td></tr>
+      <tr><td>No Matching Source File</td><td>Translated file has no matching source file to compare.</td></tr>
+      <tr><td>No Issues Found</td><td>File passed all checks successfully.</td></tr>
+    </tbody>
+  </table>
+</div>
+
 
     <h2>📦 Output</h2>
     <ul>
