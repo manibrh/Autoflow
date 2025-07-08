@@ -103,6 +103,10 @@ def run_legacy_postprocessing(input_dir, output_dir):
 
             ext = os.path.splitext(original_name)[1].lower()
             base_name = os.path.splitext(os.path.basename(original_name))[0]
+
+# 🧹 Remove language suffixes like -en, _en_US, -ta-IN, etc.
+base_name = re.sub(r'[-_](en|[a-z]{2}(?:-[A-Z]{2})?)$', '', base_name, flags=re.IGNORECASE)
+
             lang_name = langcodes.get(lang_code).language_name().title()
             lang_folder = os.path.join(output_dir, lang_code)
             os.makedirs(lang_folder, exist_ok=True)
