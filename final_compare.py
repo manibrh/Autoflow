@@ -8,6 +8,8 @@ import uuid
 from datetime import datetime
 from difflib import SequenceMatcher
 
+LANGUAGE_NAMES = set()  # Now dynamically filled from filenames
+
 PLACEHOLDER_PATTERN = re.compile(
     r'\?"\{[^{}]+\}\?"|'
     r'\{\d+\}|'
@@ -26,10 +28,24 @@ SPACING_RULES = [
     (re.compile(r'\d[\u0B80-\u0BFF\w]'), "Missing space between number and word")
 ]
 
+def extract_language_from_filename(name):
+    parts = re.split(r'[-_]', os.path.splitext(name)[0])
+    if parts:
+        last_part = parts[-1].lower()
+        if re.match(r'^[a-z]{2,3}(-[A-Z]{2})?$', last_part) or last_part.isalpha():
+            LANGUAGE_NAMES.add(last_part)
+            return last_part
+    return "unknown"
+
 def clean_filename_for_match(name):
     base = os.path.splitext(name)[0]
-    base = re.sub(r'\s*\(\d+\)$', '', base)
-    base = re.sub(r'[-_](?:[a-z]{2}(?:-[A-Z]{2})?|[A-Za-z]+)$', '', base)
+    parts = re.split(r'[-_]', base)
+    if parts and parts[-1].lower() in LANGUAGE_NAMES:
+        parts.pop()
+    elif re.match(r'^[a-z]{2,3}(-[A-Z]{2})?$', parts[-1], re.IGNORECASE):
+        parts.pop()
+    base = ''.join(parts)
+    base = re.sub(r'\d+', '', base)
     return re.sub(r'[^a-zA-Z0-9]', '', base).lower()
 
 def fix_encoding(s):
@@ -41,7 +57,7 @@ def fix_encoding(s):
 def load_properties_from_path(file_path):
     props = {}
     try:
-        with open(file_path, ' 'utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
                 if line.strip() and '=' in line and not line.startswith('#'):
                     key, val = line.split('=', 1)
@@ -147,7 +163,6 @@ def compare_files(source_data, translated_data, lang, file_name):
             else:
                 issues.extend(check_spacing_mismatches(src_str, tgt_str))
 
-            # New checks
             issues.extend(check_tag_mismatch(src_str, tgt_str))
             issues.extend(check_partial_translation(src_str, tgt_str))
             if re.search(r'\s{2,}', tgt_str):
@@ -186,6 +201,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
     source_map = {}
     for src in source_files:
         filename = src.filename
+        extract_language_from_filename(filename)
         ext = os.path.splitext(filename)[1].lower()
         cleaned = f"{clean_filename_for_match(filename)}{ext}"
         path = os.path.join(temp_dir, filename)
@@ -212,15 +228,12 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
 
     for root, dirs, files in os.walk(translated_dir):
         for file in files:
+            extract_language_from_filename(file)
             tgt_path = os.path.join(root, file)
             rel_path = os.path.relpath(tgt_path, translated_dir)
 
             parts = rel_path.split(os.sep)
-            if len(parts) >= 2:
-                lang = parts[0]
-            else:
-                match = re.search(r'[_\-]([a-z]{2}(?:-[A-Z]{2})?)\.', file)
-                lang = match.group(1) if match else 'unknown'
+            lang = parts[0] if len(parts) >= 2 else extract_language_from_filename(file)
 
             ext = os.path.splitext(file)[1].lower()
             tgt_base = clean_filename_for_match(file)
