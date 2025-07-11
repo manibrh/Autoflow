@@ -6,8 +6,8 @@ import pandas as pd
 import zipfile
 import uuid
 from datetime import datetime
+from difflib import SequenceMatcher
 
-# Pattern for detecting placeholders for mismatch check only
 PLACEHOLDER_PATTERN = re.compile(
     r'\?"\{[^{}]+\}\?"|'
     r'\{\d+\}|'
@@ -41,7 +41,7 @@ def fix_encoding(s):
 def load_properties_from_path(file_path):
     props = {}
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, ' 'utf-8') as f:
             for line in f:
                 if line.strip() and '=' in line and not line.startswith('#'):
                     key, val = line.split('=', 1)
@@ -76,7 +76,7 @@ def load_json_from_path(file_path):
                 raw_text = f.read()
                 matches = re.findall(r'"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"', raw_text)
                 for k, v in matches:
-                    recovered[k] = fix_encoding(v)  # Raw content preserved
+                    recovered[k] = fix_encoding(v)
             return recovered, f"{bad_key} - JSON error at {line_info}: {explanation}"
         except Exception as inner:
             return None, f"Unrecoverable JSON error at {line_info}: {explanation} / {inner}"
@@ -97,6 +97,29 @@ def check_spacing_mismatches(src_str, tgt_str):
             issues.append(("Spacing Mismatch", label))
 
     return list(set(issues))
+
+def check_tag_mismatch(src, tgt):
+    issues = []
+    src_tags = re.findall(r'</?([a-zA-Z][a-zA-Z0-9]*)[^>]*?>', src)
+    tgt_tags = re.findall(r'</?([a-zA-Z][a-zA-Z0-9]*)[^>]*?>', tgt)
+    if set(src_tags) != set(tgt_tags):
+        issues.append(("HTML Tag Mismatch", f"Tag sets differ. Source: {set(src_tags)}, Target: {set(tgt_tags)}"))
+    return issues
+
+def check_partial_translation(src, tgt):
+    if len(src) > 10 and len(tgt) > 10:
+        ratio = SequenceMatcher(None, src, tgt).ratio()
+        if 0.7 <= ratio < 1.0:
+            return [("Partial Translation", f"Similarity too high ({int(ratio*100)}%) but not identical.")]
+    return []
+
+def check_acronym_mismatch(src, tgt):
+    issues = []
+    acronyms = re.findall(r'\b[A-Z]{2,}\b', src)
+    for ac in acronyms:
+        if ac not in tgt:
+            issues.append(("Acronym Mismatch", f"Acronym '{ac}' not found in target."))
+    return issues
 
 def compare_files(source_data, translated_data, lang, file_name):
     report_data = []
@@ -123,6 +146,13 @@ def compare_files(source_data, translated_data, lang, file_name):
                 issues.append(("Placeholder Mismatch", "Mismatch in placeholder usage."))
             else:
                 issues.extend(check_spacing_mismatches(src_str, tgt_str))
+
+            # New checks
+            issues.extend(check_tag_mismatch(src_str, tgt_str))
+            issues.extend(check_partial_translation(src_str, tgt_str))
+            if re.search(r'\s{2,}', tgt_str):
+                issues.append(("Formatting Issue", "Double spaces found in translation."))
+            issues.extend(check_acronym_mismatch(src_str, tgt_str))
 
         for issue_type, detail in issues:
             report_data.append({
@@ -153,7 +183,6 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
     with zipfile.ZipFile(translated_zip_file, 'r') as zip_ref:
         zip_ref.extractall(translated_dir)
 
-    # Step 1: Load all source files into source_map
     source_map = {}
     for src in source_files:
         filename = src.filename
@@ -181,18 +210,21 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
 
         source_map[cleaned] = (filename, data)
 
-    # Step 2: Process target files from ZIP
-    for lang in os.listdir(translated_dir):
-        lang_path = os.path.join(translated_dir, lang)
-        if not os.path.isdir(lang_path):
-            continue
+    for root, dirs, files in os.walk(translated_dir):
+        for file in files:
+            tgt_path = os.path.join(root, file)
+            rel_path = os.path.relpath(tgt_path, translated_dir)
 
-        for file in os.listdir(lang_path):
-            tgt_path = os.path.join(lang_path, file)
+            parts = rel_path.split(os.sep)
+            if len(parts) >= 2:
+                lang = parts[0]
+            else:
+                match = re.search(r'[_\-]([a-z]{2}(?:-[A-Z]{2})?)\.', file)
+                lang = match.group(1) if match else 'unknown'
+
             ext = os.path.splitext(file)[1].lower()
             tgt_base = clean_filename_for_match(file)
 
-            # Try to match with source_map using cleaned base logic
             matched = False
             for key in source_map:
                 src_base = clean_filename_for_match(key)
@@ -211,7 +243,6 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                 })
                 continue
 
-            # Load translated content
             if ext == '.json':
                 tgt_data, err = load_json_from_path(tgt_path)
             elif ext == '.properties':
@@ -231,11 +262,9 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                 if not tgt_data:
                     continue
 
-            # Compare source and target
             issues = compare_files(source_data, tgt_data, lang, file)
             all_report_rows.extend(issues)
 
-    # Step 3: Generate Excel report
     token = str(uuid.uuid4())
     date_str = datetime.now().strftime("%d-%b-%Y")
     report_name = f"Comparison_Report_{date_str}.xlsx"
@@ -252,4 +281,3 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             worksheet.set_column(i, i, width, wrap_format)
 
     return output_path, token, report_name, all_report_rows
-
