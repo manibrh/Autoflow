@@ -197,12 +197,12 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
     temp_dir = tempfile.mkdtemp()
     translated_dir = os.path.join(temp_dir, "translated")
 
-    # Extract ZIP
     with zipfile.ZipFile(translated_zip_file, 'r') as zip_ref:
         zip_ref.extractall(translated_dir)
 
-    # Load source files
+    # Load source files and track base names
     source_map = {}
+    print("\n--- Source File Base Names ---")
     for src in source_files:
         filename = src.filename
         extract_language_from_filename(filename)
@@ -210,6 +210,8 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
         base_name = os.path.splitext(filename)[0].lower()
         path = os.path.join(temp_dir, filename)
         src.save(path)
+
+        print(f"  Source: {filename} → base: {base_name}")
 
         if ext == '.json':
             data, err = load_json_from_path(path)
@@ -228,7 +230,6 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             })
             continue
 
-        # Store cleaned name → (actual name, data)
         source_map[base_name] = (filename, data)
 
     # Process translated files
@@ -243,17 +244,19 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
 
             ext = os.path.splitext(file)[1].lower()
             tgt_base = os.path.splitext(file)[0].lower()
+            print(f"\n>> Comparing Target File: {file} (base: {tgt_base})")
 
-            # Fuzzy match to source
             best_match = None
             best_score = 0.0
             for src_base_name, (src_filename, source_data) in source_map.items():
                 score = SequenceMatcher(None, tgt_base, src_base_name).ratio()
+                print(f"   ↳ Match Score vs '{src_base_name}': {score:.2f}")
                 if score > best_score:
                     best_score = score
                     best_match = (src_filename, source_data)
 
-            if best_score < 0.6:  # configurable threshold
+            if best_score < 0.6:
+                print(f"   ❌ No match found. Best score = {best_score:.2f}")
                 all_report_rows.append({
                     "File Name": file,
                     "Language": lang,
@@ -264,6 +267,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
                 continue
 
             src_filename, source_data = best_match
+            print(f"   ✅ Matched with: {src_filename} (score: {best_score:.2f})")
 
             if ext == '.json':
                 tgt_data, err = load_json_from_path(tgt_path)
@@ -287,7 +291,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             issues = compare_files(source_data, tgt_data, lang, file)
             all_report_rows.extend(issues)
 
-    # Write report
+    # Final Report
     token = str(uuid.uuid4())
     date_str = datetime.now().strftime("%d-%b-%Y")
     report_name = f"Comparison_Report_{date_str}.xlsx"
@@ -303,4 +307,6 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             width = max(df[col].astype(str).map(len).max(), len(col)) + 5
             worksheet.set_column(i, i, width, wrap_format)
 
+    print(f"\n✅ Excel report generated at: {output_path}\n")
     return output_path, token, report_name, all_report_rows
+
