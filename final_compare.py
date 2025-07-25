@@ -191,19 +191,23 @@ def compare_files(source_data, translated_data, lang, file_name):
     return report_data
 
 def run_final_comparison_from_zip(source_files, translated_zip_file):
+    from difflib import SequenceMatcher
+
     all_report_rows = []
     temp_dir = tempfile.mkdtemp()
     translated_dir = os.path.join(temp_dir, "translated")
 
+    # Extract ZIP
     with zipfile.ZipFile(translated_zip_file, 'r') as zip_ref:
         zip_ref.extractall(translated_dir)
 
+    # Load source files
     source_map = {}
     for src in source_files:
         filename = src.filename
         extract_language_from_filename(filename)
         ext = os.path.splitext(filename)[1].lower()
-        cleaned = f"{clean_filename_for_match(filename)}{ext}"
+        base_name = os.path.splitext(filename)[0].lower()
         path = os.path.join(temp_dir, filename)
         src.save(path)
 
@@ -224,8 +228,10 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             })
             continue
 
-        source_map[cleaned] = (filename, data)
+        # Store cleaned name → (actual name, data)
+        source_map[base_name] = (filename, data)
 
+    # Process translated files
     for root, dirs, files in os.walk(translated_dir):
         for file in files:
             extract_language_from_filename(file)
@@ -236,25 +242,28 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             lang = parts[0] if len(parts) >= 2 else extract_language_from_filename(file)
 
             ext = os.path.splitext(file)[1].lower()
-            tgt_base = clean_filename_for_match(file)
+            tgt_base = os.path.splitext(file)[0].lower()
 
-            matched = False
-            for key in source_map:
-                src_base = clean_filename_for_match(key)
-                if tgt_base == src_base or tgt_base.startswith(src_base) or src_base.startswith(tgt_base):
-                    src_filename, source_data = source_map[key]
-                    matched = True
-                    break
+            # Fuzzy match to source
+            best_match = None
+            best_score = 0.0
+            for src_base_name, (src_filename, source_data) in source_map.items():
+                score = SequenceMatcher(None, tgt_base, src_base_name).ratio()
+                if score > best_score:
+                    best_score = score
+                    best_match = (src_filename, source_data)
 
-            if not matched:
+            if best_score < 0.6:  # configurable threshold
                 all_report_rows.append({
                     "File Name": file,
                     "Language": lang,
                     "Issue Type": "No matching source file",
                     "Key": file,
-                    "Source": "", "Target": "", "Details": ""
+                    "Source": "", "Target": "", "Details": f"Best match score: {best_score:.2f}"
                 })
                 continue
+
+            src_filename, source_data = best_match
 
             if ext == '.json':
                 tgt_data, err = load_json_from_path(tgt_path)
@@ -278,6 +287,7 @@ def run_final_comparison_from_zip(source_files, translated_zip_file):
             issues = compare_files(source_data, tgt_data, lang, file)
             all_report_rows.extend(issues)
 
+    # Write report
     token = str(uuid.uuid4())
     date_str = datetime.now().strftime("%d-%b-%Y")
     report_name = f"Comparison_Report_{date_str}.xlsx"
